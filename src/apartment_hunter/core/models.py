@@ -60,12 +60,13 @@ class Apartment:
 
     # Timestamps
     created_at: datetime | None = None
-    scraped_at: datetime = field(default_factory=datetime.utcnow)
+    scraped_at: datetime | None = None
 
     # LLM-enriched fields (filled after analysis)
     llm_summary: str | None = None
     llm_score: float | None = None  # 0.0 – 10.0
     llm_renovation_quality: str | None = None
+    llm_visual_description: str | None = None
     llm_pros: list[str] | None = None
     llm_cons: list[str] | None = None
 
@@ -109,6 +110,8 @@ class Apartment:
             # Truncate very long descriptions for embedding
             desc = self.description[:500]
             parts.append(desc)
+        if self.llm_visual_description:
+            parts.append(f"визуально: {self.llm_visual_description}")
         return ". ".join(parts)
 
     def to_search_metadata(self) -> dict[str, Any]:
@@ -168,6 +171,8 @@ class Apartment:
             lines.append("✅ " + " · ".join(self.llm_pros[:3]))
         if self.llm_cons:
             lines.append("⚠️ " + " · ".join(self.llm_cons[:3]))
+        if self.llm_visual_description:
+            lines.append(f"👁️ Визуально: {self.llm_visual_description}")
         lines.append(f"🔗 {self.url}")
         return "\n".join(lines)
 
@@ -180,7 +185,7 @@ class SearchProfile:
     """User-defined search criteria + notification preferences."""
 
     name: str
-    sources: list[str] = field(default_factory=lambda: ["krisha.kz"])
+    sources: list[str] = field(default_factory=list)
 
     # Filters
     city: str | None = None
@@ -209,7 +214,7 @@ class SearchProfile:
 
     # Identity
     id: str = field(default_factory=lambda: str(uuid.uuid4())[:8])
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime | None = None
 
     def matches(self, apt: Apartment) -> bool:
         """Check if an apartment matches this profile's hard filters."""
@@ -240,7 +245,7 @@ class SearchProfile:
         if (
             self.owner_only
             and apt.owner_type
-            and "собственник" not in apt.owner_type.lower()
+            and not any(x in apt.owner_type.lower() for x in ["собственник", "хозяин", "владелец"])
         ):
             return False
         if self.min_score is not None and (

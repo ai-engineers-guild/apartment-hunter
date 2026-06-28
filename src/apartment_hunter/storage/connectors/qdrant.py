@@ -90,7 +90,7 @@ class QdrantVectorStore(VectorStoreABC):
         query_filter = None
         if where:
             # Simple conversion of Chroma where clauses to Qdrant FieldCondition
-            # e.g., {"city": {"$eq": "Алматы"}} -> Filter(must=[FieldCondition(key="city", match=MatchValue(value="Алматы"))])
+            # e.g. {"city": {"$eq": "Алматы"}} -> Filter(must=[FieldCondition(...)])
             # For this basic implementation, we support simple equals matches
             conditions = []
             for key, val in where.items():

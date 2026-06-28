@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from apartment_hunter.adapters.krisha.parser import (
@@ -56,7 +57,8 @@ class KrishaAdapter(SourceAdapter):
     """Krisha.kz source adapter – fetches apartment listings asynchronously."""
 
     def __init__(self, delay: float = 2.0, timeout: int = 20) -> None:
-        self._scraper = KrishaScraper(delay=delay, timeout=timeout)
+        self._delay = delay
+        self._timeout = timeout
 
     @property
     def source_name(self) -> str:
@@ -65,18 +67,55 @@ class KrishaAdapter(SourceAdapter):
     async def fetch_listings(
         self, profile: SearchProfile, *, max_pages: int = 5
     ) -> list[Apartment]:
-        """Fetch listings matching a SearchProfile, up to max_pages."""
-        url = self._build_search_url(profile)
-        log.info("Krisha: starting fetch from %s (max %d pages)", url, max_pages)
+        """Fetch listings matching a SearchProfile, up to max_pages.
+
+        When the profile specifies multiple districts, a separate paginated
+        crawl is issued per district and results are merged (deduplicated by
+        ``source_id``).
+        """
+        urls = self._build_search_urls(profile)
+
+        seen: set[str] = set()
+        apartments: list[Apartment] = []
+
+        async with KrishaScraper(delay=self._delay, timeout=self._timeout) as scraper:
+            for url in urls:
+                page_apts = await self._fetch_pages(scraper, url, max_pages)
+                for apt in page_apts:
+                    if apt.source_id not in seen:
+                        seen.add(apt.source_id)
+                        apartments.append(apt)
+
+        log.info("Krisha: fetch complete — %d apartments collected", len(apartments))
+        return apartments
+
+    async def get_details(self, source_id: str) -> Apartment | None:
+        """Fetch a single apartment by krisha ID (e.g. 'krisha:1013405508')."""
+        krisha_id = source_id.replace("krisha:", "")
+        url = f"{_BASE}/a/show/{krisha_id}"
+        async with KrishaScraper(delay=self._delay, timeout=self._timeout) as scraper:
+            html = await scraper.fetch(url)
+        if not html:
+            return None
+        return parse_detail_page(html, url)
+
+    # ── Pagination engine ─────────────────────────────────────────────
+
+    async def _fetch_pages(
+        self,
+        scraper: KrishaScraper,
+        start_url: str,
+        max_pages: int,
+    ) -> list[Apartment]:
+        """Paginate through listings starting from *start_url*."""
+        log.info("Krisha: starting fetch from %s (max %s pages)", start_url, max_pages or "∞")
 
         apartments: list[Apartment] = []
-        current_url: str | None = url
+        current_url: str | None = start_url
+        page_num = 1
 
-        for page_num in range(1, max_pages + 1):
-            if not current_url:
-                break
-
-            html = await self._scraper.fetch_with_delay(current_url)
+        while current_url and (max_pages == 0 or page_num <= max_pages):
+            html = await scraper.fetch_with_delay(current_url)
             if not html:
                 log.warning("Krisha: failed to fetch page %d", page_num)
                 break
@@ -88,41 +127,56 @@ class KrishaAdapter(SourceAdapter):
             if not ad_urls:
                 break
 
-            # Fetch detail pages
-            for ad_url in ad_urls:
-                detail_html = await self._scraper.fetch_with_delay(ad_url)
-                if not detail_html:
-                    continue
-                apt = parse_detail_page(detail_html, ad_url)
+            # Detail pages are independent; bounded fan-out keeps fetches polite.
+            sem = asyncio.Semaphore(10)
+
+            async def _fetch_detail(detail_url: str) -> Apartment | None:
+                async with sem:
+                    detail_html = await scraper.fetch_with_delay(detail_url)
+                    if not detail_html:
+                        return None
+                    return parse_detail_page(detail_html, detail_url)
+
+            tasks = [_fetch_detail(u) for u in ad_urls]
+            results = await asyncio.gather(*tasks)
+
+            for apt in results:
                 if apt:
                     apartments.append(apt)
 
+            max_str = str(max_pages) if max_pages > 0 else "∞"
             log.info(
-                "Krisha: processed page %d/%d (%d apartments so far)",
+                "Krisha: processed page %d/%s (%d apartments so far)",
                 page_num,
-                max_pages,
+                max_str,
                 len(apartments),
             )
             current_url = next_url
+            page_num += 1
 
-        await self._scraper.close()
-        log.info("Krisha: fetch complete — %d apartments collected", len(apartments))
         return apartments
-
-    async def get_details(self, source_id: str) -> Apartment | None:
-        """Fetch a single apartment by krisha ID (e.g. 'krisha:1013405508')."""
-        krisha_id = source_id.replace("krisha:", "")
-        url = f"{_BASE}/a/show/{krisha_id}"
-        html = await self._scraper.fetch(url)
-        await self._scraper.close()
-        if not html:
-            return None
-        return parse_detail_page(html, url)
 
     # ── URL builder ───────────────────────────────────────────────────
 
     @staticmethod
-    def _build_search_url(profile: SearchProfile) -> str:
+    def _build_search_urls(profile: SearchProfile) -> list[str]:
+        """Build one or more krisha.kz search URLs from a SearchProfile.
+
+        When multiple districts are specified, a separate URL is generated for
+        each district (Krisha does not support multi-district in a single
+        query).  Returns a list with at least one URL.
+        """
+        districts = profile.districts or [None]
+        urls: list[str] = []
+        for district in districts:
+            url = KrishaAdapter._build_search_url(profile, district_override=district)
+            urls.append(url)
+        return urls
+
+    @staticmethod
+    def _build_search_url(
+        profile: SearchProfile, *, district_override: str | None = None
+    ) -> str:
         """Build a krisha.kz search URL from a SearchProfile."""
         # City slug
         city_slug = ""
@@ -135,15 +189,16 @@ class KrishaAdapter(SourceAdapter):
                     if city_lower in name or name in city_lower:
                         city_slug = slug
                         break
-        
+
         # District slug
-        if profile.districts and city_slug:
-            dist_lower = profile.districts[0].lower().strip()
+        district_name = district_override
+        if district_name and city_slug:
+            dist_lower = district_name.lower().strip()
             # Try to match the district
             for name, slug in DISTRICTS.items():
                 if dist_lower in name or name in dist_lower:
-                    # Krisha uses "almaty--bostandykskij-rajon" format, so we replace trailing slash
-                    city_slug = city_slug.rstrip('/') + "-" + slug + "/"
+                    # Krisha uses "almaty--bostandykskij-rajon" format.
+                    city_slug = city_slug.rstrip("/") + "-" + slug + "/"
                     break
 
         base = _RENT_URL + city_slug
@@ -171,13 +226,11 @@ class KrishaAdapter(SourceAdapter):
             parts.append("das[who]=1")
         if profile.bounding_box and len(profile.bounding_box) == 4:
             lat_min, lon_min, lat_max, lon_max = profile.bounding_box
-            # Krisha polygon is just a list of points: pLat,Lon,Lat,Lon...
-            # We create a rectangle from the bounding box
             points = [
                 f"{lat_min},{lon_min}",
                 f"{lat_max},{lon_min}",
                 f"{lat_max},{lon_max}",
-                f"{lat_min},{lon_max}"
+                f"{lat_min},{lon_max}",
             ]
             areas_str = "p" + ",".join(points)
             parts.append(f"areas={areas_str}")

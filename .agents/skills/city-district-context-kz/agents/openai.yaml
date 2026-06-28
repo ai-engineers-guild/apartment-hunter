@@ -1,0 +1,6 @@
+version: 1
+display_name: City District Context KZ
+short_description: Research district quality, transport, pricing, and livability in Kazakhstan cities.
+default_prompt: >
+  Help me understand which district fits my housing priorities in Kazakhstan,
+  including transport, prices, safety perception, noise, and neighborhood tradeoffs.

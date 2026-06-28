@@ -1,4 +1,4 @@
 #!/bin/bash
-cd /<PATH>/krisha.kz
+cd /<PATH>/apartment_hunter
 source .venv/bin/activate
-python -m krisha
+uv run apartment-hunter-ingest

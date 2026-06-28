@@ -9,32 +9,58 @@ from __future__ import annotations
 
 import json
 import logging
+from pathlib import Path
 from typing import Any
 
+import httpx
 from fastmcp import FastMCP
 
-from apartment_hunter.analysis.llm_analyzer import LLMAnalyzer
 from apartment_hunter.config import get_settings
 from apartment_hunter.core.models import Apartment, SearchProfile
-from apartment_hunter.ingest.pipeline import IngestPipeline
-from apartment_hunter.notifications.telegram import TelegramNotifier
 from apartment_hunter.storage.factory import get_storage, get_vector_store
 
 log = logging.getLogger(__name__)
 
-# ── Singleton resources ────────────────────────────────────────────────────────
+# ── Lazy singleton accessors ───────────────────────────────────────────────────
 
 _settings = get_settings()
-_db = get_storage()
-_vector = get_vector_store()
-_analyzer = LLMAnalyzer()
+_db = None
+_vector = None
+_analyzer = None
 
 
-def _pipeline() -> IngestPipeline:
+def _get_db():
+    global _db
+    if _db is None:
+        _db = get_storage()
+    return _db
+
+
+def _get_vector():
+    global _vector
+    if _vector is None:
+        _vector = get_vector_store()
+    return _vector
+
+
+def _get_analyzer():
+    global _analyzer
+    if _analyzer is None:
+        from apartment_hunter.analysis.llm_analyzer import LLMAnalyzer
+
+        _analyzer = LLMAnalyzer()
+    return _analyzer
+
+
+def _pipeline():
+    from apartment_hunter.ingest.pipeline import IngestPipeline
+    from apartment_hunter.notifications.telegram import TelegramNotifier
+
+    settings = get_settings()
     notifiers = []
-    if _settings.telegram_bot_token:
+    if settings.telegram_bot_token:
         notifiers.append(TelegramNotifier())
-    return IngestPipeline(db=_db, vector=_vector, notifiers=notifiers)
+    return IngestPipeline(db=_get_db(), vector=_get_vector(), notifiers=notifiers)
 
 
 # ── MCP Server ─────────────────────────────────────────────────────────────────
@@ -94,7 +120,7 @@ async def search_apartments(
     if owner_only:
         filters["owner_only"] = True
 
-    results = _db.search_apartments(**filters)
+    results = _get_db().search_apartments(**filters)
     if not results:
         return "Квартиры по заданным фильтрам не найдены."
     return _format_apartments(results)
@@ -128,11 +154,11 @@ async def semantic_search(
         elif conditions:
             where = {"$and": conditions}
 
-    source_ids = _vector.semantic_search(query, n_results=n_results, where=where)
+    source_ids = _get_vector().semantic_search(query, n_results=n_results, where=where)
     if not source_ids:
         return "Ничего не найдено по вашему запросу."
 
-    apartments = [_db.get_apartment(sid) for sid in source_ids]
+    apartments = [_get_db().get_apartment(sid) for sid in source_ids]
     apartments = [a for a in apartments if a is not None]
     return _format_apartments(apartments)
 
@@ -143,11 +169,11 @@ async def get_apartment_details(source_id: str) -> str:
 
     Returns all available fields including LLM analysis, price history, and photos.
     """
-    apt = _db.get_apartment(source_id)
+    apt = _get_db().get_apartment(source_id)
     if not apt:
         return f"Квартира {source_id} не найдена."
 
-    history = _db.get_price_history(source_id)
+    history = _get_db().get_price_history(source_id)
     card = apt.to_card()
     if history and len(history) > 1:
         card += "\n\n📈 История цен:"
@@ -170,21 +196,22 @@ async def analyze_apartment(source_id: str) -> str:
     location, and other factors. Returns score, pros, cons, and summary.
     Forces re-analysis even if already analyzed.
     """
-    apt = _db.get_apartment(source_id)
+    apt = _get_db().get_apartment(source_id)
     if not apt:
         return f"Квартира {source_id} не найдена."
 
-    result = await _analyzer.analyze(apt)
+    result = await _get_analyzer().analyze(apt)
 
     # Update in-memory object
     apt.llm_score = result.score
     apt.llm_summary = result.summary
     apt.llm_pros = result.pros
     apt.llm_cons = result.cons
-    apt.renovation_quality = result.renovation_quality
+    apt.llm_renovation_quality = result.renovation_quality
 
-    # Save updated apartment
-    _db.upsert_apartment(apt)
+    # Save updated apartment and refresh vector metadata.
+    _get_db().upsert_apartment(apt)
+    _get_vector().upsert(apt)
 
     lines = [
         f"📊 Анализ квартиры {source_id}",
@@ -197,6 +224,66 @@ async def analyze_apartment(source_id: str) -> str:
         lines.append("⚠️ Минусы: " + ", ".join(result.cons))
     if result.renovation_quality:
         lines.append(f"🔧 Ремонт: {result.renovation_quality}")
+    return "\n".join(lines)
+
+
+@mcp.tool()
+async def download_apartment_photos(source_id: str, limit: int = 3) -> str:
+    """Download apartment photos locally so the AI agent can inspect them.
+
+    Returns the absolute paths of the downloaded images. You (the AI) can then
+    use your `view_file` tool on these paths to visually analyze the apartment.
+    """
+    apt = _get_db().get_apartment(source_id)
+    if not apt:
+        return f"Квартира {source_id} не найдена."
+
+    if not apt.photo_urls:
+        return f"У квартиры {source_id} нет фотографий."
+
+    # Create scratch directory
+    scratch_dir = (
+        Path(_settings.db_path).parent.parent
+        / "scratch"
+        / "photos"
+        / source_id.replace(":", "_")
+    )
+    scratch_dir.mkdir(parents=True, exist_ok=True)
+
+    urls = apt.photo_urls[:limit]
+    downloaded_paths: list[str] = []
+
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+        for i, url in enumerate(urls, 1):
+            try:
+                resp = await client.get(url, headers=headers)
+                resp.raise_for_status()
+
+                # Determine extension or default to jpg
+                ext = ".jpg"
+                if ".png" in url.lower():
+                    ext = ".png"
+                if ".webp" in url.lower():
+                    ext = ".webp"
+
+                filepath = scratch_dir / f"photo_{i}{ext}"
+                with open(filepath, "wb") as f:
+                    f.write(resp.content)
+                downloaded_paths.append(str(filepath.absolute()))
+            except Exception as e:
+                log.warning("Failed to download %s: %s", url, e)
+
+    if not downloaded_paths:
+        return "Не удалось скачать фотографии."
+
+    lines = [
+        "✅ Фотографии успешно скачаны. "
+        "Абсолютные пути для использования в view_file:\n"
+    ]
+    for path in downloaded_paths:
+        lines.append(f"- {path}")
+
     return "\n".join(lines)
 
 
@@ -220,7 +307,7 @@ async def get_top_apartments(
     if price_max is not None:
         filters["price_max"] = price_max
 
-    results = _db.get_top_apartments(limit=limit, **filters)
+    results = _get_db().get_top_apartments(limit=limit, **filters)
     if not results:
         return "Нет проанализированных квартир. Запустите run_ingestion сначала."
     return _format_apartments(results)
@@ -232,7 +319,7 @@ async def get_new_apartments(since_hours: int = 24) -> str:
 
     Shows the most recent apartments sorted by score.
     """
-    results = _db.get_new_apartments(since_hours=since_hours)
+    results = _get_db().get_new_apartments(since_hours=since_hours)
     if not results:
         return f"Новых квартир за последние {since_hours}ч не найдено."
     return f"Найдено {len(results)} новых квартир:\n\n" + _format_apartments(results)
@@ -249,7 +336,7 @@ async def compare_apartments(source_ids: list[str]) -> str:
     if len(source_ids) > 5:
         source_ids = source_ids[:5]
 
-    apartments = [_db.get_apartment(sid) for sid in source_ids]
+    apartments = [_get_db().get_apartment(sid) for sid in source_ids]
     apartments = [a for a in apartments if a is not None]
     if len(apartments) < 2:
         return "Недостаточно квартир найдено для сравнения."
@@ -297,7 +384,7 @@ async def compare_apartments(source_ids: list[str]) -> str:
 @mcp.tool()
 async def get_price_history(source_id: str) -> str:
     """Get price change history for an apartment."""
-    history = _db.get_price_history(source_id)
+    history = _get_db().get_price_history(source_id)
     if not history:
         return f"История цен для {source_id} не найдена."
     lines = [f"📈 История цен для {source_id}:"]
@@ -319,7 +406,9 @@ async def get_price_history(source_id: str) -> str:
 @mcp.tool()
 async def create_search_profile(
     name: str,
+    sources: list[str] | None = None,
     city: str | None = None,
+    districts: list[str] | None = None,
     rooms: list[int] | None = None,
     price_min: int | None = None,
     price_max: int | None = None,
@@ -339,7 +428,9 @@ async def create_search_profile(
 
     Args:
         name: Human-readable profile name, e.g. 'Алматы 2к до 300т'
+        sources: Source names, e.g. ['krisha.kz']; defaults to all registered adapters
         city: City name in Russian, e.g. 'Алматы', 'Астана'
+        districts: Optional list of district names
         rooms: List of room counts, e.g. [1, 2]
         price_min/price_max: Price range in KZT
         area_min/area_max: Area range in m²
@@ -352,7 +443,9 @@ async def create_search_profile(
     """
     profile = SearchProfile(
         name=name,
+        sources=sources or [],
         city=city,
+        districts=districts,
         rooms=rooms,
         price_min=price_min,
         price_max=price_max,
@@ -365,14 +458,18 @@ async def create_search_profile(
         min_score=min_score,
         bounding_box=bounding_box,
     )
-    _db.save_profile(profile)
-    return f"✅ Профиль '{name}' создан (ID: {profile.id})\n\nПараметры:\n{json.dumps(profile.to_dict(), indent=2, ensure_ascii=False)}"
+    _get_db().save_profile(profile)
+    profile_json = json.dumps(profile.to_dict(), indent=2, ensure_ascii=False)
+    return (
+        f"✅ Профиль '{name}' создан (ID: {profile.id})\n\n"
+        f"Параметры:\n{profile_json}"
+    )
 
 
 @mcp.tool()
 async def list_search_profiles() -> str:
     """List all active search profiles."""
-    profiles = _db.list_profiles(active_only=True)
+    profiles = _get_db().list_profiles(active_only=True)
     if not profiles:
         return "Нет активных профилей поиска. Создайте один с помощью create_search_profile."
     lines = ["📋 Активные профили поиска:\n"]
@@ -395,7 +492,7 @@ async def list_search_profiles() -> str:
 @mcp.tool()
 async def delete_search_profile(profile_id: str) -> str:
     """Delete a search profile by ID."""
-    if _db.delete_profile(profile_id):
+    if _get_db().delete_profile(profile_id):
         return f"✅ Профиль {profile_id} удалён."
     return f"❌ Профиль {profile_id} не найден."
 
@@ -414,14 +511,11 @@ async def run_ingestion(profile_id: str | None = None) -> str:
     pipeline = _pipeline()
 
     if profile_id:
-        profile = _db.get_profile(profile_id)
+        profile = _get_db().get_profile(profile_id)
         if not profile:
             return f"Профиль {profile_id} не найден."
         new = await pipeline.run_profile(profile)
-        return (
-            f"✅ Сбор данных завершён для профиля '{profile.name}'\n"
-            f"Найдено новых квартир: {len(new)}"
-        )
+        return _format_ingestion_result(profile.name, new)
     else:
         results = await pipeline.run_all_profiles()
         if not results:
@@ -443,7 +537,7 @@ async def get_stats() -> str:
 
     Shows total apartments, new apartments, analyzed count, average prices, scores, etc.
     """
-    stats = _db.get_stats()
+    stats = _get_db().get_stats()
     lines = [
         "📊 Статистика Apartment Hunter\n",
         f"  Всего квартир: {stats['total_apartments']}",
@@ -462,7 +556,7 @@ async def get_stats() -> str:
         lines.append("\n  🏙️ Города:")
         for city, count in stats["top_cities"].items():
             lines.append(f"    {city}: {count}")
-    lines.append(f"\n  🗂️ Вектор-хранилище: {_vector.count} документов")
+    lines.append(f"\n  🗂️ Вектор-хранилище: {_get_vector().count} документов")
     return "\n".join(lines)
 
 
@@ -474,7 +568,7 @@ async def get_stats() -> str:
 @mcp.resource("apartment://{source_id}")
 def apartment_resource(source_id: str) -> str:
     """Full apartment data as a resource."""
-    apt = _db.get_apartment(source_id)
+    apt = _get_db().get_apartment(source_id)
     if not apt:
         return f"Apartment {source_id} not found."
     return json.dumps(apt.to_dict(), indent=2, ensure_ascii=False)
@@ -483,7 +577,7 @@ def apartment_resource(source_id: str) -> str:
 @mcp.resource("stats://overview")
 def stats_resource() -> str:
     """Database statistics as a resource."""
-    return json.dumps(_db.get_stats(), indent=2, ensure_ascii=False)
+    return json.dumps(_get_db().get_stats(), indent=2, ensure_ascii=False)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -494,7 +588,7 @@ def stats_resource() -> str:
 @mcp.prompt()
 def apartment_review(source_id: str) -> str:
     """Generate a detailed apartment review prompt."""
-    apt = _db.get_apartment(source_id)
+    apt = _get_db().get_apartment(source_id)
     if not apt:
         return f"Квартира {source_id} не найдена."
     card = apt.to_card()
@@ -511,7 +605,7 @@ def apartment_review(source_id: str) -> str:
 @mcp.prompt()
 def market_analysis(city: str = "Алматы", rooms: int = 2) -> str:
     """Generate a market analysis prompt for a specific city/room count."""
-    apartments = _db.search_apartments(city=city, rooms=[rooms])
+    apartments = _get_db().search_apartments(city=city, rooms=[rooms])
     if not apartments:
         return f"Нет данных по {rooms}-комн. квартирам в {city}."
 
@@ -538,6 +632,18 @@ def market_analysis(city: str = "Алматы", rooms: int = 2) -> str:
 def _format_apartments(apartments: list[Apartment]) -> str:
     cards = [apt.to_card() for apt in apartments[:20]]
     return f"Найдено {len(apartments)} квартир:\n\n" + "\n\n---\n\n".join(cards)
+
+
+def _format_ingestion_result(profile_name: str, apartments: list[Apartment]) -> str:
+    """Render current-ingest delta for a single profile."""
+    lines = [
+        f"✅ Сбор данных завершён для профиля '{profile_name}'",
+        f"Найдено новых квартир: {len(apartments)}",
+    ]
+    if apartments:
+        lines.append("")
+        lines.append(_format_apartments(apartments[:5]))
+    return "\n".join(lines)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

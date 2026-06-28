@@ -30,8 +30,6 @@ dependencies = [
     "pydantic-settings>=2.0",
     # Scheduling
     "apscheduler>=3.10",
-    # Telegram
-    "python-telegram-bot>=21.0",
     # Utilities
     "Pillow>=10.0",
     "tqdm>=4.66",
@@ -72,3 +70,21 @@ warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
 ignore_missing_imports = true
+
+[tool.coverage.run]
+source = ["src/apartment_hunter"]
+omit = [
+    "src/apartment_hunter/__main__.py",
+    "src/apartment_hunter/analysis/embeddings.py",
+    "src/apartment_hunter/api/*",
+    "src/apartment_hunter/mcp/*",
+    "src/apartment_hunter/notifications/*",
+    "src/apartment_hunter/storage/connectors/firebase.py",
+    "src/apartment_hunter/storage/connectors/postgres.py",
+    "src/apartment_hunter/storage/connectors/qdrant.py",
+    "src/apartment_hunter/storage/connectors/supabase_store.py",
+]
+
+[tool.coverage.report]
+fail_under = 80
+show_missing = true

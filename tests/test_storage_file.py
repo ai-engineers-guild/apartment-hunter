@@ -1,11 +1,9 @@
-"""Tests for the local JSON FileStore."""
-
 import tempfile
+from datetime import UTC, datetime
 from pathlib import Path
-from datetime import datetime
 
-from apartment_hunter.storage.connectors.file import FileStore
 from apartment_hunter.core.models import Apartment, SearchProfile
+from apartment_hunter.storage.connectors.file import FileStore
 
 
 def test_filestore_upsert_and_get() -> None:
@@ -50,7 +48,7 @@ def test_filestore_search_apartments() -> None:
                 price=100000 + i * 10000,
                 rooms=i % 3 + 1,
                 city="Алматы" if i % 2 == 0 else "Астана",
-                scraped_at=datetime.utcnow(),
+                scraped_at=datetime.now(UTC),
             )
             store.upsert_apartment(apt)
 
@@ -59,7 +57,9 @@ def test_filestore_search_apartments() -> None:
         assert len(results_almaty) == 3
 
         # Search by price and rooms
-        results_filtered = store.search_apartments(city="Алматы", price_max=125000, rooms=[1, 2, 3])
+        results_filtered = store.search_apartments(
+            city="Алматы", price_max=125000, rooms=[1, 2, 3]
+        )
         assert len(results_filtered) == 2  # test:0 (100k) and test:2 (120k)
 
 
@@ -74,7 +74,7 @@ def test_filestore_profiles() -> None:
         )
 
         store.save_profile(profile)
-        
+
         # Get profile
         retrieved = store.get_profile(profile.id)
         assert retrieved is not None
@@ -88,3 +88,56 @@ def test_filestore_profiles() -> None:
         deleted = store.delete_profile(profile.id)
         assert deleted is True
         assert len(store.list_profiles()) == 0
+
+
+def test_filestore_existing_apartment_is_no_longer_marked_new() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        store = FileStore(str(Path(tmpdir) / "test_db.json"))
+        apt = Apartment(
+            source_id="test:existing",
+            source="test",
+            url="http://test.com/existing",
+            price=150000,
+            scraped_at=datetime.now(UTC),
+        )
+
+        assert store.upsert_apartment(apt) is True
+        assert len(store.get_new_apartments()) == 1
+        assert store.upsert_apartment(apt) is False
+        assert store.get_apartment("test:existing") is not None
+        assert store.get_apartment("test:existing").is_new is False
+
+def test_filestore_upsert_does_not_mutate_apartment_object() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        store = FileStore(str(Path(tmpdir) / "test_db.json"))
+
+        # Create an apartment with some initial values
+        apt = Apartment(
+            source_id="test:mutation",
+            source="test",
+            url="http://test.com/mutation",
+            price=150000,
+            scraped_at=datetime.now(UTC),
+            is_new=True,
+            llm_score=None
+        )
+
+        # Insert first time
+        store.upsert_apartment(apt)
+
+        # Modify the DB record directly to simulate LLM analysis
+        store.data["apartments"]["test:mutation"]["llm_score"] = 8.5
+        store._save()
+
+        # Upsert the same object again (which doesn't have llm_score set and has is_new=True)
+        store.upsert_apartment(apt)
+
+        # The original object should remain unmodified
+        assert apt.is_new is True
+        assert apt.llm_score is None
+
+        # But the DB should have preserved the LLM score and set is_new=False
+        db_apt = store.get_apartment("test:mutation")
+        assert db_apt is not None
+        assert db_apt.is_new is False
+        assert db_apt.llm_score == 8.5

@@ -1,0 +1,6 @@
+version: 1
+display_name: Apartment Search
+short_description: Search apartments, interpret listing jargon, and monitor ingestion deltas.
+default_prompt: >
+  Help me search apartments in Kazakhstan, interpret listing phrases,
+  and tell me what is new or changed after ingestion.

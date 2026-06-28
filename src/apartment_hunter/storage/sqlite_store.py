@@ -5,7 +5,9 @@ from __future__ import annotations
 import json
 import logging
 import sqlite3
-from datetime import datetime, timedelta
+from collections.abc import Generator
+from contextlib import contextmanager
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from apartment_hunter.core.interfaces import StorageBackend
@@ -44,6 +46,7 @@ CREATE TABLE IF NOT EXISTS apartments (
     llm_summary   TEXT,
     llm_score     REAL,
     llm_renovation_quality TEXT,
+    llm_visual_description TEXT,
     llm_pros      TEXT,
     llm_cons      TEXT,
     is_new        INTEGER DEFAULT 1
@@ -90,8 +93,20 @@ class SQLiteStore(StorageBackend):
         conn.execute("PRAGMA foreign_keys=ON")
         return conn
 
+    @contextmanager
+    def _connect(self) -> Generator[sqlite3.Connection, None, None]:
+        conn = self._conn()
+        try:
+            yield conn
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+
     def _init_db(self) -> None:
-        with self._conn() as conn:
+        with self._connect() as conn:
             conn.executescript(_SCHEMA)
         log.info("SQLite database initialized at %s", self._db_path)
 
@@ -128,6 +143,7 @@ class SQLiteStore(StorageBackend):
             "llm_summary": apt.llm_summary,
             "llm_score": apt.llm_score,
             "llm_renovation_quality": apt.llm_renovation_quality,
+            "llm_visual_description": apt.llm_visual_description,
             "llm_pros": (
                 json.dumps(apt.llm_pros, ensure_ascii=False) if apt.llm_pros else None
             ),
@@ -156,12 +172,13 @@ class SQLiteStore(StorageBackend):
         cols = ", ".join(row.keys())
         placeholders = ", ".join(f":{k}" for k in row.keys())
         # Check if already exists
-        with self._conn() as conn:
+        with self._connect() as conn:
             existing = conn.execute(
                 "SELECT source_id FROM apartments WHERE source_id = ?",
                 (apt.source_id,),
             ).fetchone()
             if existing:
+                row["is_new"] = 0
                 # Update non-LLM fields only (preserve analysis)
                 update_fields = [
                     k
@@ -172,6 +189,7 @@ class SQLiteStore(StorageBackend):
                         "llm_summary",
                         "llm_score",
                         "llm_renovation_quality",
+                        "llm_visual_description",
                         "llm_pros",
                         "llm_cons",
                     )
@@ -197,17 +215,20 @@ class SQLiteStore(StorageBackend):
         llm_renovation_quality: str | None,
         llm_pros: list[str] | None,
         llm_cons: list[str] | None,
+        llm_visual_description: str | None = None,
     ) -> None:
-        with self._conn() as conn:
+        with self._connect() as conn:
             conn.execute(
                 """UPDATE apartments SET
                    llm_summary = ?, llm_score = ?, llm_renovation_quality = ?,
+                   llm_visual_description = ?,
                    llm_pros = ?, llm_cons = ?
                    WHERE source_id = ?""",
                 (
                     llm_summary,
                     llm_score,
                     llm_renovation_quality,
+                    llm_visual_description,
                     json.dumps(llm_pros, ensure_ascii=False) if llm_pros else None,
                     json.dumps(llm_cons, ensure_ascii=False) if llm_cons else None,
                     source_id,
@@ -215,13 +236,13 @@ class SQLiteStore(StorageBackend):
             )
 
     def get_apartment(self, source_id: str) -> Apartment | None:
-        with self._conn() as conn:
+        with self._connect() as conn:
             row = conn.execute(
                 "SELECT * FROM apartments WHERE source_id = ?", (source_id,)
             ).fetchone()
             return self._row_to_apt(row) if row else None
 
-    def search_apartments(self, **filters: Any) -> list[Apartment]:
+    def search_apartments(self, *, limit: int = 100, **filters: Any) -> list[Apartment]:
         clauses: list[str] = []
         params: list[Any] = []
         for key, val in filters.items():
@@ -260,20 +281,20 @@ class SQLiteStore(StorageBackend):
                 clauses.append("owner_type LIKE '%собственник%'")
 
         where = " AND ".join(clauses) if clauses else "1=1"
-        with self._conn() as conn:
+        with self._connect() as conn:
             rows = conn.execute(
-                f"SELECT * FROM apartments WHERE {where} ORDER BY scraped_at DESC LIMIT 100",
-                params,
+                f"SELECT * FROM apartments WHERE {where} ORDER BY scraped_at DESC LIMIT ?",
+                params + [limit],
             ).fetchall()
             return [self._row_to_apt(r) for r in rows]
 
-    def get_new_apartments(self, since_hours: int = 24) -> list[Apartment]:
-        cutoff = (datetime.utcnow() - timedelta(hours=since_hours)).isoformat()
-        with self._conn() as conn:
+    def get_new_apartments(self, since_hours: int = 24, *, limit: int = 50) -> list[Apartment]:
+        cutoff = (datetime.now(UTC) - timedelta(hours=since_hours)).isoformat()
+        with self._connect() as conn:
             rows = conn.execute(
                 "SELECT * FROM apartments WHERE scraped_at >= ? AND is_new = 1 "
-                "ORDER BY llm_score DESC NULLS LAST, scraped_at DESC LIMIT 50",
-                (cutoff,),
+                "ORDER BY llm_score DESC NULLS LAST, scraped_at DESC LIMIT ?",
+                (cutoff, limit),
             ).fetchall()
             return [self._row_to_apt(r) for r in rows]
 
@@ -286,8 +307,8 @@ class SQLiteStore(StorageBackend):
     # ── Price History ─────────────────────────────────────────────────
 
     def record_price(self, source_id: str, price: int) -> None:
-        today = datetime.utcnow().strftime("%Y-%m-%d")
-        with self._conn() as conn:
+        today = datetime.now(UTC).strftime("%Y-%m-%d")
+        with self._connect() as conn:
             conn.execute(
                 "INSERT OR IGNORE INTO price_history (apartment_id, price, recorded_at) "
                 "VALUES (?, ?, ?)",
@@ -295,7 +316,7 @@ class SQLiteStore(StorageBackend):
             )
 
     def get_price_history(self, source_id: str) -> list[dict]:
-        with self._conn() as conn:
+        with self._connect() as conn:
             rows = conn.execute(
                 "SELECT price, recorded_at FROM price_history "
                 "WHERE apartment_id = ? ORDER BY recorded_at",
@@ -307,7 +328,7 @@ class SQLiteStore(StorageBackend):
 
     def save_profile(self, profile: SearchProfile) -> None:
         config_json = json.dumps(profile.to_dict(), ensure_ascii=False)
-        with self._conn() as conn:
+        with self._connect() as conn:
             conn.execute(
                 "INSERT OR REPLACE INTO search_profiles (id, name, config, active) "
                 "VALUES (?, ?, ?, ?)",
@@ -315,7 +336,7 @@ class SQLiteStore(StorageBackend):
             )
 
     def get_profile(self, profile_id: str) -> SearchProfile | None:
-        with self._conn() as conn:
+        with self._connect() as conn:
             row = conn.execute(
                 "SELECT config FROM search_profiles WHERE id = ?", (profile_id,)
             ).fetchone()
@@ -324,7 +345,7 @@ class SQLiteStore(StorageBackend):
         return None
 
     def list_profiles(self, active_only: bool = True) -> list[SearchProfile]:
-        with self._conn() as conn:
+        with self._connect() as conn:
             q = "SELECT config FROM search_profiles"
             if active_only:
                 q += " WHERE active = 1"
@@ -332,7 +353,7 @@ class SQLiteStore(StorageBackend):
             return [SearchProfile.from_dict(json.loads(r["config"])) for r in rows]
 
     def delete_profile(self, profile_id: str) -> bool:
-        with self._conn() as conn:
+        with self._connect() as conn:
             cursor = conn.execute(
                 "DELETE FROM search_profiles WHERE id = ?", (profile_id,)
             )
@@ -341,7 +362,7 @@ class SQLiteStore(StorageBackend):
     # ── Notifications ─────────────────────────────────────────────────
 
     def mark_notified(self, source_id: str, profile_id: str, channel: str) -> None:
-        with self._conn() as conn:
+        with self._connect() as conn:
             conn.execute(
                 "INSERT OR IGNORE INTO notifications_log "
                 "(apartment_id, profile_id, channel) VALUES (?, ?, ?)",
@@ -349,7 +370,7 @@ class SQLiteStore(StorageBackend):
             )
 
     def was_notified(self, source_id: str, profile_id: str, channel: str) -> bool:
-        with self._conn() as conn:
+        with self._connect() as conn:
             row = conn.execute(
                 "SELECT 1 FROM notifications_log "
                 "WHERE apartment_id = ? AND profile_id = ? AND channel = ?",
@@ -360,7 +381,7 @@ class SQLiteStore(StorageBackend):
     # ── Stats ─────────────────────────────────────────────────────────
 
     def get_stats(self) -> dict[str, Any]:
-        with self._conn() as conn:
+        with self._connect() as conn:
             total = conn.execute("SELECT COUNT(*) c FROM apartments").fetchone()["c"]
             new = conn.execute(
                 "SELECT COUNT(*) c FROM apartments WHERE is_new = 1"

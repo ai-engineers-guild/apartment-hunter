@@ -1,198 +1,87 @@
-[![RU](https://img.shields.io/badge/README-RU-red.svg)](https://github.com/andprov/krisha.kz/blob/main/README.ru.md)
+# Apartment Hunter
 
-# Real Estate Rental Site Parser krisha.kz
+Apartment Hunter is a reusable apartment-search library and MCP service for rental
+search workflows. The core library is source-agnostic; site-specific behavior lives
+in adapters such as `krisha.kz`.
 
-[![License: MIT](https://img.shields.io/github/license/andprov/krisha.kz?color=blueviolet)](https://github.com/andprov/krisha.kz/blob/main/LICENSE.md)
-[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
-[![Python versions](https://img.shields.io/badge/python-_3.10_|_3.11_|_3.12-blue)](https://www.python.org/)
-[![Main workflow](https://github.com/andprov/krisha.kz/actions/workflows/main.yml/badge.svg)](https://github.com/andprov/krisha.kz/actions/workflows/main.yml)
+## What it does
 
-# Description
+- Ingests apartment listings from source adapters
+- Normalizes them into a shared `Apartment` domain model
+- Stores listings, profiles, notifications, and price history
+- Runs semantic search and optional LLM analysis
+- Exposes the workflow through an MCP server for Codex Desktop or other MCP clients
 
-Searches and views listings based on the specified [parameters:](#params):
+## Architecture
 
-- Requests data from preview pages of listings. Finds links to pages with detailed descriptions.
-- Visits the detailed description pages of each listing and collects data.
-- Stores results in SQLite database.
+`src/apartment_hunter/core`
+- Canonical models and abstract interfaces
 
+`src/apartment_hunter/adapters`
+- Source-specific adapters and parsers
 
-Search parameters selection replicates the website's functionality. To specify search parameters, use the `SEARCH_PARAMETERS.json` file in the project's root directory.
+`src/apartment_hunter/ingest`
+- Fetch, deduplicate, analyze, index, notify
 
-### Third-party libraries used in the project
+`src/apartment_hunter/storage`
+- Storage backends and vector stores
 
-- [BeautifulSoup4](https://www.crummy.com/software/BeautifulSoup/bs4/doc/)
-- [requests](https://requests.readthedocs.io/en/latest/)
+`src/apartment_hunter/mcp`
+- MCP tools for search, ingestion, monitoring, and analysis
 
-# Installation and Running
+`src/krisha`
+- Legacy project code preserved separately from the reusable library
 
-Clone the repository:
+## Local commands
 
-```shell
-git clone <https or SSH URL>
+```powershell
+uv run pytest
+uv run pytest --cov
+uv run ruff check .
+uv run apartment-hunter-mcp
+uv run apartment-hunter-ingest
 ```
 
-Navigate to the project folder:
+## Codex Desktop integration
 
-```shell
-cd krisha.kz
-```
+Apartment Hunter is designed to work as a Codex Desktop MCP service.
 
-Create a virtual environment:
+Typical workflow:
 
-```shell
-python3 -m venv .venv
-```
+1. Start the MCP server with `uv run apartment-hunter-mcp`
+2. Create or update search profiles through MCP tools
+3. Run ingestion for the current profile set
+4. Ask for:
+   new apartments,
+   changed prices,
+   top-rated apartments,
+   semantic matches,
+   apartment comparisons
 
-Activate the virtual environment:
+The project also includes local skills in `.agents/skills`:
 
-```shell
-source .venv/bin/activate
-```
+- `apartment_search`
+  Domain workflow for apartment search, ingestion, monitoring, and translating
+  listing jargon into agent-friendly meaning.
+- `city-district-context-kz`
+  City and district context research for Kazakhstan: district quality, transport,
+  pricing, livability, construction, and neighborhood tradeoffs.
 
-Install dependencies:
+## Design rules
 
-- for use
+- Core remains source-agnostic
+- Source-specific logic belongs in adapters
+- MCP should compose the core library rather than embed scraper-specific logic
+- `is_new` means first discovery, not "seen again in the latest run"
+- The current-ingest delta should come from pipeline results, not from naive DB scans
 
-    ```shell
-    pip install .
-    ```
+## Current source support
 
-- for dev in editable mode
+- `krisha.kz` via `src/apartment_hunter/adapters/krisha`
 
-    ```shell
-    pip install -e .[test,lint] 
-    ```
+The codebase is intentionally structured so additional sources can be added by
+implementing `SourceAdapter` and registering the adapter.
 
-Specify search parameters in the [SEARCH_PARAMETERS.json](SEARCH_PARAMETERS.json) file. See [examples](#examples)
+## License
 
-Run the script:
-
-```shell
-python -m krisha
-```
-
-# Setting Up Scheduled Runs
-
-Edit the [cron.sh](cron.sh) file, adding your project path:
-
-```shell
-#!/bin/bash
-cd /<PATH>/krisha.kz
-source .venv/bin/activate
-python -m krisha
-```
-
-If necessary, add the rights to execute `cron.sh`:
-
-```shell
-chmod +x /<PATH>/krisha.kz/cron.sh
-```
-
-Open cron settings:
-
-```shell
-crontab -e
-```
-
-Add a cron job entry:
-
-```shell
-# Daily run at 12 PM.
-0 12 * * * /<PATH>/krisha.kz/cron.sh
-```
-
-# <a id="params">Search Parameters</a>
-
-- `city` - Search city from 0 to 20;
-- `has_photo` - Listing has photos;
-- `furniture` - Apartment has furniture;
-- `rooms` - Number of rooms from 1 to 5;
-- `price_from` - Minimum price;
-- `price_to` - Maximum price;
-- `owner` - Listing posted by the owner;
-
-### City Values
-
-- 0 - All of Kazakhstan.
-- 1 - Almaty.
-- 2 - Astana.
-- 3 - Shymkent.
-- 4 - Abai Region.
-- 5 - Akmola Region.
-- 6 - Aktobe Region.
-- 7 - Almaty Region.
-- 8 - Atyrau Region.
-- 9 - East Kazakhstan Region.
-- 10 - Zhambyl Region.
-- 11 - Zhetysu Region.
-- 12 - West Kazakhstan Region.
-- 13 - Karaganda Region.
-- 14 - Kostanay Region.
-- 15 - Kyzylorda Region.
-- 16 - Mangystau Region.
-- 17 - Pavlodar Region.
-- 18 - North Kazakhstan Region.
-- 19 - Turkestan Region.
-- 20 - Ulytau Region.
-
-### <a id="examples">Examples of Search Parameter Specification:</a>
-
-1. Find one-room apartments in Almaty.
-Listings with photos.
-Apartments with furniture.
-Price from 100000 to 300000.
-Listings from owners.
-
-```json
-{
-  "city": 1,
-  "has_photo": true,
-  "furniture": true,
-  "rooms": [1],
-  "price_from": 100000,
-  "price_to": 300000,
-  "owner": true
-}
-```
-
-2. Find two-room and three-room apartments in Astana.
-Listings with photos.
-Apartments without furniture.
-Price up to 400000.
-Listings from owners.
-
-```json
-{
-  "city": 2,
-  "has_photo": true,
-  "rooms": [2, 3],
-  "price_to": 400000,
-  "owner": true
-}
-```
-
-3. Find apartments with any number of rooms in Kazakhstan.
-Listings without photos.
-Apartments without furniture.
-Price from 200000.
-Listings from owners, agencies, and private realtors.
-
-```json
-{
-  "price_from": 200000
-}
-```
-
-4. Returns the same result as example No. 3.
-
-```json
-{
-  "city": 0,
-  "has_photo": false,
-  "furniture": false,
-  "rooms": [0],
-  "price_from": 200000,
-  "price_to": null,
-  "owner": false
-}
-```
+[MIT](LICENSE)

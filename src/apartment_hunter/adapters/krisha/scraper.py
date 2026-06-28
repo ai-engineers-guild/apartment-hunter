@@ -24,7 +24,13 @@ _RETRY_DELAYS = (5, 15, 60, 300)
 
 
 class KrishaScraper:
-    """Async HTTP scraper with retry, rate-limiting, and jitter."""
+    """Async HTTP scraper with retry, rate-limiting, and jitter.
+
+    Supports ``async with`` for automatic resource cleanup::
+
+        async with KrishaScraper() as scraper:
+            html = await scraper.fetch(url)
+    """
 
     def __init__(
         self,
@@ -90,3 +96,9 @@ class KrishaScraper:
         if self._client and not self._client.is_closed:
             await self._client.aclose()
             self._client = None
+
+    async def __aenter__(self) -> KrishaScraper:
+        return self
+
+    async def __aexit__(self, *exc: object) -> None:
+        await self.close()

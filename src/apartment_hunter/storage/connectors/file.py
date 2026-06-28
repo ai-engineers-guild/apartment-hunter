@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import os
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from apartment_hunter.core.interfaces import StorageBackend
@@ -46,16 +46,23 @@ class FileStore(StorageBackend):
         sid = apt.source_id
         is_new = sid not in self.data["apartments"]
 
-        # If exists, keep existing LLM analysis
+        apt_data = apt.to_dict()
+
+        # If exists, preserve existing LLM analysis in stored data
         if not is_new:
             existing = self.data["apartments"][sid]
-            apt.llm_score = existing.get("llm_score")
-            apt.llm_summary = existing.get("llm_summary")
-            apt.llm_pros = existing.get("llm_pros")
-            apt.llm_cons = existing.get("llm_cons")
-            apt.llm_renovation_quality = existing.get("llm_renovation_quality")
+            for llm_key in (
+                "llm_score",
+                "llm_summary",
+                "llm_pros",
+                "llm_cons",
+                "llm_renovation_quality",
+            ):
+                if existing.get(llm_key) is not None:
+                    apt_data[llm_key] = existing[llm_key]
+            apt_data["is_new"] = False
 
-        self.data["apartments"][sid] = apt.to_dict()
+        self.data["apartments"][sid] = apt_data
         self._save()
         return is_new
 
@@ -114,7 +121,7 @@ class FileStore(StorageBackend):
         return results[:100]
 
     def get_new_apartments(self, since_hours: int = 24) -> list[Apartment]:
-        cutoff = datetime.utcnow() - timedelta(hours=since_hours)
+        cutoff = datetime.now(UTC) - timedelta(hours=since_hours)
         results = []
         for sid, d in self.data["apartments"].items():
             scraped_at_val = d["scraped_at"]
@@ -130,7 +137,7 @@ class FileStore(StorageBackend):
         return results[:50]
 
     def record_price(self, source_id: str, price: int) -> None:
-        today = datetime.utcnow().strftime("%Y-%m-%d")
+        today = datetime.now(UTC).strftime("%Y-%m-%d")
         history = self.data["history"].setdefault(source_id, [])
         if not any(h["date"] == today and h["price"] == price for h in history):
             history.append({"price": price, "date": today})
@@ -162,7 +169,7 @@ class FileStore(StorageBackend):
 
     def mark_notified(self, source_id: str, profile_id: str, channel: str) -> None:
         key = f"{source_id}_{profile_id}_{channel}"
-        self.data["notified"][key] = datetime.utcnow().isoformat()
+        self.data["notified"][key] = datetime.now(UTC).isoformat()
         self._save()
 
     def was_notified(self, source_id: str, profile_id: str, channel: str) -> bool:

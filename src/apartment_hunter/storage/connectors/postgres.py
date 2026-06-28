@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import logging
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from apartment_hunter.core.interfaces import StorageBackend
@@ -81,10 +82,7 @@ class PostgresStore(StorageBackend):
     def __init__(self, dsn: str | None) -> None:
         if not dsn:
             raise ValueError("postgres_dsn must be set when using postgres backend")
-        try:
-            import psycopg
-            from psycopg.rows import dict_row
-        except ImportError:
+        if importlib.util.find_spec("psycopg") is None:
             raise ImportError(
                 "psycopg[binary] is required for PostgresStore. Run: pip install psycopg[binary]"
             )
@@ -106,8 +104,7 @@ class PostgresStore(StorageBackend):
 
     def _row_to_apt(self, row: dict) -> Apartment:
         row["is_new"] = bool(row["is_new"])
-        # JSONB fields are automatically parsed by psycopg if standard json, but dict_row might return dict
-        # We ensure they are correct lists
+        # psycopg usually decodes JSONB automatically; normalize only the bool flag here.
         return Apartment(**row)
 
     def upsert_apartment(self, apt: Apartment) -> bool:
@@ -120,6 +117,10 @@ class PostgresStore(StorageBackend):
         row["llm_cons"] = (
             json.dumps(row["llm_cons"], ensure_ascii=False) if row["llm_cons"] else None
         )
+        if not self.get_apartment(apt.source_id):
+            row["is_new"] = True
+        else:
+            row["is_new"] = False
 
         keys = list(row.keys())
         cols = ", ".join(keys)
@@ -219,7 +220,7 @@ class PostgresStore(StorageBackend):
             return [self._row_to_apt(r) for r in rows]
 
     def get_new_apartments(self, since_hours: int = 24) -> list[Apartment]:
-        cutoff = datetime.utcnow() - timedelta(hours=since_hours)
+        cutoff = datetime.now(UTC) - timedelta(hours=since_hours)
         with self._conn() as conn:
             rows = conn.execute(
                 "SELECT * FROM apartments WHERE scraped_at >= %s AND is_new = TRUE "
@@ -231,7 +232,10 @@ class PostgresStore(StorageBackend):
     def record_price(self, source_id: str, price: int) -> None:
         with self._conn() as conn:
             conn.execute(
-                "INSERT INTO price_history (apartment_id, price) VALUES (%s, %s) ON CONFLICT DO NOTHING",
+                (
+                    "INSERT INTO price_history (apartment_id, price) "
+                    "VALUES (%s, %s) ON CONFLICT DO NOTHING"
+                ),
                 (source_id, price),
             )
             conn.commit()
@@ -239,7 +243,10 @@ class PostgresStore(StorageBackend):
     def get_price_history(self, source_id: str) -> list[dict]:
         with self._conn() as conn:
             rows = conn.execute(
-                "SELECT price, recorded_at FROM price_history WHERE apartment_id = %s ORDER BY recorded_at",
+                (
+                    "SELECT price, recorded_at FROM price_history "
+                    "WHERE apartment_id = %s ORDER BY recorded_at"
+                ),
                 (source_id,),
             ).fetchall()
             return [{"price": r["price"], "date": str(r["recorded_at"])} for r in rows]
@@ -249,7 +256,10 @@ class PostgresStore(StorageBackend):
             conn.execute(
                 """INSERT INTO search_profiles (id, name, config, active)
                    VALUES (%s, %s, %s, %s)
-                   ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, config = EXCLUDED.config, active = EXCLUDED.active""",
+                   ON CONFLICT (id) DO UPDATE
+                   SET name = EXCLUDED.name,
+                       config = EXCLUDED.config,
+                       active = EXCLUDED.active""",
                 (
                     profile.id,
                     profile.name,
@@ -298,7 +308,11 @@ class PostgresStore(StorageBackend):
     def mark_notified(self, source_id: str, profile_id: str, channel: str) -> None:
         with self._conn() as conn:
             conn.execute(
-                "INSERT INTO notifications_log (apartment_id, profile_id, channel) VALUES (%s, %s, %s) ON CONFLICT DO NOTHING",
+                (
+                    "INSERT INTO notifications_log "
+                    "(apartment_id, profile_id, channel) "
+                    "VALUES (%s, %s, %s) ON CONFLICT DO NOTHING"
+                ),
                 (source_id, profile_id, channel),
             )
             conn.commit()
@@ -306,7 +320,10 @@ class PostgresStore(StorageBackend):
     def was_notified(self, source_id: str, profile_id: str, channel: str) -> bool:
         with self._conn() as conn:
             row = conn.execute(
-                "SELECT 1 FROM notifications_log WHERE apartment_id = %s AND profile_id = %s AND channel = %s",
+                (
+                    "SELECT 1 FROM notifications_log "
+                    "WHERE apartment_id = %s AND profile_id = %s AND channel = %s"
+                ),
                 (source_id, profile_id, channel),
             ).fetchone()
             return row is not None

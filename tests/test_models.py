@@ -1,6 +1,6 @@
 """Tests for core domain models."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 
 from apartment_hunter.core.models import Apartment, SearchProfile
 
@@ -17,7 +17,7 @@ def test_apartment_creation_and_card() -> None:
         city="Алматы",
         address="Абая 1",
         district="Алмалинский",
-        scraped_at=datetime(2023, 1, 1),
+        scraped_at=datetime(2023, 1, 1, tzinfo=UTC),
     )
     assert apt.source_id == "test:1"
     assert apt.price_per_sqm == int(150000 / 50.5)
@@ -25,7 +25,7 @@ def test_apartment_creation_and_card() -> None:
     card = apt.to_card()
     assert "150 000" in card
     assert "Алматы" in card or "Абая 1" in card
-    assert "2-комн" in card
+    assert "2 комн" in card
 
 
 def test_search_profile_matching() -> None:
@@ -46,7 +46,7 @@ def test_search_profile_matching() -> None:
         price=180000,
         rooms=2,
         city="Алматы",
-        scraped_at=datetime.utcnow(),
+        scraped_at=datetime.now(UTC),
         owner_type="Хозяин недвижимости",
     )
     assert profile.matches(apt_match) is True
@@ -58,7 +58,7 @@ def test_search_profile_matching() -> None:
         price=180000,
         rooms=2,
         city="Астана",
-        scraped_at=datetime.utcnow(),
+        scraped_at=datetime.now(UTC),
         owner_type="Хозяин недвижимости",
     )
     assert profile.matches(apt_wrong_city) is False
@@ -70,7 +70,7 @@ def test_search_profile_matching() -> None:
         price=250000,
         rooms=2,
         city="Алматы",
-        scraped_at=datetime.utcnow(),
+        scraped_at=datetime.now(UTC),
         owner_type="Хозяин недвижимости",
     )
     assert profile.matches(apt_expensive) is False
@@ -82,7 +82,7 @@ def test_search_profile_matching() -> None:
         price=180000,
         rooms=2,
         city="Алматы",
-        scraped_at=datetime.utcnow(),
+        scraped_at=datetime.now(UTC),
         owner_type="Крыша Агент",
     )
     assert profile.matches(apt_agency) is False

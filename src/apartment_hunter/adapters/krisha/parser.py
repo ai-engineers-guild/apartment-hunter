@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 import logging
 import re
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from bs4 import BeautifulSoup
@@ -48,7 +48,7 @@ def parse_detail_page(html: str, url: str) -> Apartment | None:
     source_id = f"krisha:{raw_id}"
 
     # Photos – collect all, not just the first
-    photos_raw = advert.get("photos", [])
+    photos_raw = advert.get("photos") or jsdata.get("photos") or []
     photo_urls = []
     for p in photos_raw:
         src = p.get("src") if isinstance(p, dict) else None
@@ -98,7 +98,7 @@ def parse_detail_page(html: str, url: str) -> Apartment | None:
         photo_urls=photo_urls,
         owner_type=params.get("owner_type"),
         created_at=_parse_datetime(adverts.get("createdAt")),
-        scraped_at=datetime.utcnow(),
+        scraped_at=datetime.now(UTC),
     )
 
 
@@ -265,7 +265,7 @@ def _parse_datetime(val: Any) -> datetime | None:
         return None
     if isinstance(val, (int, float)):
         try:
-            return datetime.fromtimestamp(val)
+            return datetime.fromtimestamp(val, tz=UTC)
         except (OSError, ValueError):
             return None
     try:
