@@ -1,9 +1,7 @@
 # DB
 DB_CREATED = "Database - CREATED OK"
 DB_OK = "Database - CHECK OK"
-DB_INSERT_OK = (
-    "Database - Ads data has been successfully inserted into database"
-)
+DB_INSERT_OK = "Database - Ads data has been successfully inserted into database"
 
 # REQUEST
 REQUEST_START = "Request - GET {}"
@@ -19,16 +17,13 @@ CR_LOGGER_CONFIG_WRONG = (
 )
 LOAD_PARSER_CONFIG_OK = "Crawler - Load parser config OK"
 LOAD_SEARCH_PARAMS_ERROR = (
-    "Crawler - Load search parameters ERROR. Use basic parameters. "
-    "\n     ERROR: {}"
+    "Crawler - Load search parameters ERROR. Use basic parameters. " "\n     ERROR: {}"
 )
 LOAD_SEARCH_PARAMS_OK = "Crawler - Load search parameters OK"
 CR_START = "Crawler - START"
 CR_STOPPED = "Crawler - STOPPED"
 CR_FOUND = "Crawler - Search query has found {} advertisements across {} pages"
-CR_ADS_NOT_FOUND = (
-    "Crawler - STOPPED: Ads not found. Try using other search parameters"
-)
+CR_ADS_NOT_FOUND = "Crawler - STOPPED: Ads not found. Try using other search parameters"
 CR_PROCESS = "Crawler - Processed {} pages out of {}"
 CR_FLAT_DATA_OK = "Crawler - Flat data is obtained from Ad"
 CR_ADS_ON_PAGE_OK = "Crawler - Ads data on page has been processed"

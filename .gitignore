@@ -8,3 +8,8 @@ db.sqlite
 *.log
 _sql/
 .ruff_cache
+.coverage
+build/
+scratch/
+*.egg-info/
+data/

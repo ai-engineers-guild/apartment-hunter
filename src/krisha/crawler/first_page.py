@@ -23,9 +23,7 @@ class FirstPage:
             return
         if len(rooms) == 1:
             return parser.equ.join([parser.rooms_url, str(*rooms)])
-        room_data = [
-            parser.br_equ.join([parser.rooms_url, str(i)]) for i in rooms
-        ]
+        room_data = [parser.br_equ.join([parser.rooms_url, str(i)]) for i in rooms]
         return re.sub(r"\b5\b", "5.100", parser.sep.join(room_data))
 
     @staticmethod

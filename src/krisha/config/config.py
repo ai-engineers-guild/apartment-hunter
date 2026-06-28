@@ -19,9 +19,7 @@ def load_config() -> Config:
     path = get_app_path()
     setup_logs(path)
     parser_config = get_parser_config()
-    search_params = get_search_parameters(
-        path.search_params_file, parser_config
-    )
+    search_params = get_search_parameters(path.search_params_file, parser_config)
     return Config(
         path=path,
         parser_config=parser_config,

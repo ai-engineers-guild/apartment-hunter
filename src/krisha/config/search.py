@@ -77,9 +77,7 @@ class SearchParameters:
     def _validate_bool_args(value: bool, name: str) -> bool:
         if type(value) is bool:
             return value
-        logger.warning(
-            msg.CR_BOOL_VALIDATE.format(f"{name}", type(value), False)
-        )
+        logger.warning(msg.CR_BOOL_VALIDATE.format(f"{name}", type(value), False))
         return False
 
     @staticmethod
