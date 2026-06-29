@@ -18,7 +18,7 @@ class SourceAdapter(ABC):
 
     @abstractmethod
     async def fetch_listings(
-        self, profile: SearchProfile, *, max_pages: int = 5
+        self, profile: SearchProfile, *, max_pages: int = 5, known_ids: set[str] | None = None
     ) -> list[Apartment]:
         """Fetch apartment listings matching the given profile."""
 
@@ -36,6 +36,10 @@ class StorageBackend(ABC):
 
     @abstractmethod
     def get_apartment(self, source_id: str) -> Apartment | None: ...
+
+    def get_all_source_ids(self) -> set[str]:
+        """Return all known source IDs. Override in backends that support efficient bulk lookup."""
+        return set()
 
     @abstractmethod
     def search_apartments(self, **filters: Any) -> list[Apartment]: ...

@@ -13,3 +13,22 @@ build/
 scratch/
 *.egg-info/
 data/
+
+# Scratch / one-off scripts
+scratch_*.py
+run_*.py
+test_cloak_output.html
+*_result.txt
+*_results.txt
+*_output.txt
+results*.txt
+intermediate_results.txt
+
+# Plans (internal)
+plans/
+
+# Serena (AI IDE assistant — local only)
+.serena/memories/
+.serena/project.yml
+.serena/project.local.yml
+.serena/cache/

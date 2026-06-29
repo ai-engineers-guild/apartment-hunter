@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
+from datetime import UTC
 from pathlib import Path
 from typing import Any
 
@@ -16,6 +17,7 @@ import httpx
 from fastmcp import FastMCP
 
 from apartment_hunter.config import get_settings
+from apartment_hunter.core.interfaces import StorageBackend, VectorStore
 from apartment_hunter.core.models import Apartment, SearchProfile
 from apartment_hunter.storage.factory import get_storage, get_vector_store
 
@@ -29,21 +31,21 @@ _vector = None
 _analyzer = None
 
 
-def _get_db():
+def _get_db() -> StorageBackend:
     global _db
     if _db is None:
         _db = get_storage()
     return _db
 
 
-def _get_vector():
+def _get_vector() -> VectorStore:
     global _vector
     if _vector is None:
         _vector = get_vector_store()
     return _vector
 
 
-def _get_analyzer():
+def _get_analyzer() -> Any:
     global _analyzer
     if _analyzer is None:
         from apartment_hunter.analysis.llm_analyzer import LLMAnalyzer
@@ -52,12 +54,12 @@ def _get_analyzer():
     return _analyzer
 
 
-def _pipeline():
+def _pipeline() -> Any:
     from apartment_hunter.ingest.pipeline import IngestPipeline
     from apartment_hunter.notifications.telegram import TelegramNotifier
 
     settings = get_settings()
-    notifiers = []
+    notifiers: list[Any] = []
     if settings.telegram_bot_token:
         notifiers.append(TelegramNotifier())
     return IngestPipeline(db=_get_db(), vector=_get_vector(), notifiers=notifiers)
@@ -158,8 +160,8 @@ async def semantic_search(
     if not source_ids:
         return "Ничего не найдено по вашему запросу."
 
-    apartments = [_get_db().get_apartment(sid) for sid in source_ids]
-    apartments = [a for a in apartments if a is not None]
+    maybe_apts = [_get_db().get_apartment(sid) for sid in source_ids]
+    apartments = [a for a in maybe_apts if a is not None]
     return _format_apartments(apartments)
 
 
@@ -307,7 +309,7 @@ async def get_top_apartments(
     if price_max is not None:
         filters["price_max"] = price_max
 
-    results = _get_db().get_top_apartments(limit=limit, **filters)
+    results = _get_db().get_top_apartments(limit=limit, **filters)  # type: ignore[attr-defined]
     if not results:
         return "Нет проанализированных квартир. Запустите run_ingestion сначала."
     return _format_apartments(results)
@@ -336,8 +338,8 @@ async def compare_apartments(source_ids: list[str]) -> str:
     if len(source_ids) > 5:
         source_ids = source_ids[:5]
 
-    apartments = [_get_db().get_apartment(sid) for sid in source_ids]
-    apartments = [a for a in apartments if a is not None]
+    maybe_compare = [_get_db().get_apartment(sid) for sid in source_ids]
+    apartments = [a for a in maybe_compare if a is not None]
     if len(apartments) < 2:
         return "Недостаточно квартир найдено для сравнения."
 
@@ -419,7 +421,8 @@ async def create_search_profile(
     furniture: bool | None = None,
     keywords: list[str] | None = None,
     min_score: float | None = None,
-    bounding_box: list[float] | None = None,
+    polygons: list[list[list[float]]] | None = None,
+    nl_description: str | None = None,
 ) -> str:
     """Create a search profile for ongoing apartment monitoring.
 
@@ -439,7 +442,8 @@ async def create_search_profile(
         furniture: True=with furniture, False=without, None=any
         keywords: Semantic search keywords for RAG matching
         min_score: Minimum LLM score for notifications (0.0-10.0)
-        bounding_box: [lat_min, lon_min, lat_max, lon_max] list of floats for map bounding box
+        polygons: List of polygons. Each polygon is a list of [lat, lon] floats forming a closed shape.
+        nl_description: Free-text description for semantic re-ranking (e.g. 'светлая квартира с новым ремонтом')
     """
     profile = SearchProfile(
         name=name,
@@ -456,7 +460,8 @@ async def create_search_profile(
         furniture=furniture,
         keywords=keywords,
         min_score=min_score,
-        bounding_box=bounding_box,
+        polygons=polygons,
+        nl_description=nl_description,
     )
     _get_db().save_profile(profile)
     profile_json = json.dumps(profile.to_dict(), indent=2, ensure_ascii=False)
@@ -485,6 +490,8 @@ async def list_search_profiles() -> str:
                 ",", " "
             )
             lines.append(f"  Цена: {price_range} KZT")
+        if p.nl_description:
+            lines.append(f"  NL-фильтр: {p.nl_description[:80]}...")
         lines.append("")
     return "\n".join(lines)
 
@@ -495,6 +502,113 @@ async def delete_search_profile(profile_id: str) -> str:
     if _get_db().delete_profile(profile_id):
         return f"✅ Профиль {profile_id} удалён."
     return f"❌ Профиль {profile_id} не найден."
+
+
+@mcp.tool()
+async def search_by_profile(
+    profile_id: str,
+    hours: int = 48,
+    limit: int = 20,
+) -> str:
+    """Show apartments matching a search profile, ranked by semantic similarity.
+
+    Uses the profile's hard filters (price, rooms, polygon) AND the nl_description
+    for semantic re-ranking via ChromaDB vector search.
+    Pass hours=0 to return all stored apartments for this profile (no time filter).
+    """
+    from datetime import datetime, timedelta
+
+    profile = _get_db().get_profile(profile_id)
+    if not profile:
+        return f"Профиль {profile_id} не найден."
+
+    filters: dict[str, Any] = {}
+    if profile.city:
+        filters["city"] = profile.city
+    if profile.rooms:
+        filters["rooms"] = profile.rooms
+    if profile.price_min is not None:
+        filters["price_min"] = profile.price_min
+    if profile.price_max is not None:
+        filters["price_max"] = profile.price_max
+    if profile.area_min is not None:
+        filters["area_min"] = profile.area_min
+    if profile.area_max is not None:
+        filters["area_max"] = profile.area_max
+
+    apartments = _get_db().search_apartments(**filters, limit=500)
+    if not apartments:
+        return "Квартиры по заданным фильтрам не найдены."
+
+    if profile.polygons:
+        from apartment_hunter.adapters.krisha.adapter import KrishaAdapter
+        valid_apts = []
+        for apt in apartments:
+            if apt.lat is None or apt.lon is None:
+                continue
+            in_poly = False
+            for poly in profile.polygons:
+                if KrishaAdapter._is_point_in_polygon(apt.lat, apt.lon, poly):
+                    in_poly = True
+                    break
+            if in_poly:
+                valid_apts.append(apt)
+        apartments = valid_apts
+
+    if hours > 0:
+        cutoff = datetime.now(UTC) - timedelta(hours=hours)
+        valid_apts = []
+        for apt in apartments:
+            if apt.scraped_at:
+                scraped_at = apt.scraped_at
+                if scraped_at.tzinfo is None:
+                    scraped_at = scraped_at.replace(tzinfo=UTC)
+                if scraped_at >= cutoff:
+                    valid_apts.append(apt)
+        apartments = valid_apts
+
+    if not apartments:
+        return "Новые квартиры по заданным фильтрам за указанное время не найдены."
+
+    if profile.nl_description:
+        where: dict | None = None
+        conditions = []
+        if profile.city:
+            conditions.append({"city": {"$eq": profile.city}})  # type: ignore[dict-item]
+        if profile.price_max:
+            conditions.append({"price": {"$lte": profile.price_max}})  # type: ignore[dict-item]
+
+        if len(conditions) == 1:
+            where = conditions[0]
+        elif conditions:
+            where = {"$and": conditions}
+
+        source_ids = _get_vector().semantic_search(
+            profile.nl_description, n_results=limit * 3, where=where
+        )
+
+        apt_map = {a.source_id: a for a in apartments}
+        ranked_apts = []
+        for sid in source_ids:
+            if sid in apt_map:
+                ranked_apts.append(apt_map[sid])
+                del apt_map[sid]
+
+        remaining = list(apt_map.values())
+        def _sort_key(a: Apartment) -> datetime:
+            return a.scraped_at.replace(tzinfo=UTC) if a.scraped_at else datetime.min.replace(tzinfo=UTC)
+
+        remaining.sort(key=_sort_key, reverse=True)
+        apartments = ranked_apts + remaining
+
+    apartments = apartments[:limit]
+    if not apartments:
+        return "Нет квартир для отображения."
+
+    res = _format_apartments(apartments)
+    if profile.nl_description:
+        res += f"\n\nПрофиль: {profile.name} | Описание: {profile.nl_description[:100]}"
+    return res
 
 
 # ── Ingestion ──────────────────────────────────────────────────────────────────
@@ -556,7 +670,7 @@ async def get_stats() -> str:
         lines.append("\n  🏙️ Города:")
         for city, count in stats["top_cities"].items():
             lines.append(f"    {city}: {count}")
-    lines.append(f"\n  🗂️ Вектор-хранилище: {_get_vector().count} документов")
+    lines.append(f"\n  🗂️ Вектор-хранилище: {_get_vector().count} документов")  # type: ignore[attr-defined]
     return "\n".join(lines)
 
 
@@ -651,7 +765,7 @@ def _format_ingestion_result(profile_name: str, apartments: list[Apartment]) -> 
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-def main():
+def main() -> None:
     """Run the MCP server."""
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s"

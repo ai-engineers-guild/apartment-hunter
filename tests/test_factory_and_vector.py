@@ -15,7 +15,10 @@ def test_storage_factory_selects_backends(mocker) -> None:
         "apartment_hunter.storage.connectors.supabase_store.SupabaseStore",
         side_effect=lambda url, key: ("supabase", url, key),
     )
-    mocker.patch("apartment_hunter.storage.connectors.firebase.FirebaseStore", side_effect=lambda path: ("firebase", path))
+    mocker.patch(
+        "apartment_hunter.storage.connectors.firebase.FirebaseStore",
+        side_effect=lambda path: ("firebase", path),
+    )
     mocker.patch(
         "apartment_hunter.storage.connectors.qdrant.QdrantVectorStore",
         side_effect=lambda url, key: ("qdrant", url, key),

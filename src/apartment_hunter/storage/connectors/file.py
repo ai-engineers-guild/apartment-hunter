@@ -117,7 +117,7 @@ class FileStore(StorageBackend):
                 apt = self.get_apartment(sid)
                 if apt:
                     results.append(apt)
-        results.sort(key=lambda a: a.scraped_at, reverse=True)
+        results.sort(key=lambda a: a.scraped_at or datetime.min, reverse=True)
         return results[:100]
 
     def get_new_apartments(self, since_hours: int = 24) -> list[Apartment]:
@@ -143,8 +143,11 @@ class FileStore(StorageBackend):
             history.append({"price": price, "date": today})
             self._save()
 
-    def get_price_history(self, source_id: str) -> list[dict]:
-        return self.data["history"].get(source_id, [])
+    def get_price_history(self, source_id: str) -> list[dict]:  # type: ignore[override]
+        return list(self.data["history"].get(source_id, []))
+
+    def get_all_source_ids(self) -> set[str]:
+        return set(self.data["apartments"].keys())
 
     def save_profile(self, profile: SearchProfile) -> None:
         self.data["profiles"][profile.id] = profile.to_dict()

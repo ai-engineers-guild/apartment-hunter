@@ -1,8 +1,19 @@
 # Apartment Hunter
 
-Apartment Hunter is a reusable apartment-search library and MCP service for rental
-search workflows. The core library is source-agnostic; site-specific behavior lives
-in adapters such as `krisha.kz`.
+Rental apartment aggregator with MCP server, polygon-based geographic search,
+vector similarity search, and optional LLM-powered scoring.
+Built for the Kazakhstan market (krisha.kz), extensible to other sources.
+
+## Features
+
+- **Krisha.kz scraper** - Cloudflare bypass via CloakBrowser + Playwright
+- **Polygon search** - server-side geographic filter (`areas=p...`) for precise area targeting
+- **Incremental ingestion** - early-exit pagination: stops when a page has 0 new listings
+- **MCP server** - expose tools to AI agents (Claude Desktop, etc.)
+- **Vector search** - ChromaDB-backed semantic search over apartment descriptions
+- **Natural language profiles** - describe your ideal apartment in Russian, get semantically ranked results
+- **LLM scoring** - optional GPT/Claude analysis for quality scoring and renovation classification
+- **SQLite storage** - zero-dependency local persistence
 
 ## What it does
 

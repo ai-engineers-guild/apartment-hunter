@@ -200,10 +200,12 @@ class SearchProfile:
     furniture: bool | None = None
     owner_only: bool = False
     has_photo: bool = True
-    bounding_box: list[float] | None = None
+    bounding_box: list[float] | None = None  # Deprecated in favor of polygons
+    polygons: list[list[list[float]]] | None = None  # List of polygons. Each polygon is a list of [lat, lon] points
 
     # Semantic / keyword filters
     keywords: list[str] | None = None
+    nl_description: str | None = None
     description_must_contain: list[str] | None = None
     description_must_not_contain: list[str] | None = None
 

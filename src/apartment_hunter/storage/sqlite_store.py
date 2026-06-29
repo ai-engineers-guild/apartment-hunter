@@ -139,7 +139,7 @@ class SQLiteStore(StorageBackend):
             "photo_urls": json.dumps(apt.photo_urls, ensure_ascii=False),
             "owner_type": apt.owner_type,
             "created_at": apt.created_at.isoformat() if apt.created_at else None,
-            "scraped_at": apt.scraped_at.isoformat(),
+            "scraped_at": apt.scraped_at.isoformat() if apt.scraped_at else None,
             "llm_summary": apt.llm_summary,
             "llm_score": apt.llm_score,
             "llm_renovation_quality": apt.llm_renovation_quality,
@@ -241,6 +241,11 @@ class SQLiteStore(StorageBackend):
                 "SELECT * FROM apartments WHERE source_id = ?", (source_id,)
             ).fetchone()
             return self._row_to_apt(row) if row else None
+
+    def get_all_source_ids(self) -> set[str]:
+        with self._connect() as conn:
+            rows = conn.execute("SELECT source_id FROM apartments").fetchall()
+            return {r[0] for r in rows}
 
     def search_apartments(self, *, limit: int = 100, **filters: Any) -> list[Apartment]:
         clauses: list[str] = []

@@ -39,7 +39,15 @@ Use create_search_profile with parameters like:
 - area_min / area_max: in m²
 - owner_only: true to exclude agencies
 - min_score: minimum LLM quality score (0-10)
-- bounding_box: [lat_min, lon_min, lat_max, lon_max] if the user asks for a specific custom area (e.g. "Золотой квадрат", "рядом с Абая-Правды"). AS AN AI, YOU MUST GENERATE THESE COORDINATES YOURSELF based on your geographical knowledge of Kazakhstan and pass them to the tool.
+- polygons: list of polygons, where each polygon is a list of [lat, lon] points.
+### CRITICAL RULE FOR KRISHA.KZ: Always Use Polygons for Location-Based Search
+Text search on krisha.kz for specific streets or landmarks is highly inaccurate and returns false positives from other districts.
+When a user asks for a specific street (e.g. "Makataeva") or landmark (e.g. "Megapark"):
+1. First, find the coordinates using a web search or maps tool.
+2. Draw a closed polygon around the target area. A polygon is a list of `[lat, lon]` points forming a closed loop (first point must equal last point, or the system closes it automatically).
+3. Pass `polygons` to `create_search_profile`. The polygon is sent directly to krisha.kz as a server-side geographic filter (`areas=p...`), so only listings physically located inside the polygon are returned.
+   - Do NOT rely on `keywords` for geographic filtering — krisha.kz text search returns false positives from apartments that merely mention the street/landmark in their description ("10 minutes from Megapark", etc.).
+   - `keywords` are only appropriate when the user explicitly wants to filter by text in the listing description (e.g., specific amenities or building name).
 ```
 
 ### 2. Running Data Collection
@@ -72,6 +80,13 @@ When the user asks "what is new" or "what changed from the last run", prefer:
 - `get_new_apartments` — see what's new in the last 24 hours
 - `get_top_apartments` — highest-rated apartments
 - `get_stats` — database overview
+
+### 6. Natural Language (Prompt) Profiles
+- Use `nl_description` when creating profile for semantic preferences
+- Use `search_by_profile(profile_id, hours=48)` to get ranked new apartments
+- Explain that hard filters run first, then semantic re-ranking
+- Give example: "новый ремонт не бабушкин, светлая, вся техника, тихий двор"
+- Note: nl_description is NOT passed to Krisha URL — it's purely for post-ranking
 
 ## Domain translation rules
 

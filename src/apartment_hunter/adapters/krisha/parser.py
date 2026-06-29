@@ -161,7 +161,7 @@ def _extract_jsdata(soup: BeautifulSoup) -> dict | None:
     if start == -1 or end == -1:
         return None
     try:
-        return json.loads(text[start : end + 1])
+        return dict(json.loads(text[start : end + 1]))
     except json.JSONDecodeError as exc:
         log.warning("Failed to parse jsdata JSON: %s", exc)
         return None

@@ -99,8 +99,9 @@ class IngestPipeline:
         )
 
         try:
+            known_ids = self.db.get_all_source_ids()
             return await adapter.fetch_listings(
-                profile, max_pages=self._settings.max_pages_per_run
+                profile, max_pages=0, known_ids=known_ids
             )
         except Exception as exc:
             log.error("Fetch failed for %s: %s", source_name, exc)
@@ -123,13 +124,14 @@ class IngestPipeline:
         if not self.analyzer or not apartments:
             return
 
+        analyzer = self.analyzer
         log.info("Analyzing %d new apartments...", len(apartments))
         sem = asyncio.Semaphore(self._settings.max_pages_per_run or 5)
 
         async def _analyze_one(apt: Apartment) -> None:
             async with sem:
                 try:
-                    result = await self.analyzer.analyze(apt)
+                    result = await analyzer.analyze(apt)
                     apt.llm_score = result.score
                     apt.llm_summary = result.summary
                     apt.llm_pros = result.pros
@@ -189,7 +191,7 @@ def run_once_cli() -> None:
         level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s"
     )
 
-    async def _run():
+    async def _run() -> None:
         pipeline = IngestPipeline()
         results = await pipeline.run_all_profiles()
         for name, count in results.items():

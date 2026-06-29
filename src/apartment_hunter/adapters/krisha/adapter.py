@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 
 from apartment_hunter.adapters.krisha.parser import (
     parse_detail_page,
@@ -65,7 +66,8 @@ class KrishaAdapter(SourceAdapter):
         return "krisha.kz"
 
     async def fetch_listings(
-        self, profile: SearchProfile, *, max_pages: int = 5
+        self, profile: SearchProfile, *, max_pages: int = 5,
+        known_ids: set[str] | None = None,
     ) -> list[Apartment]:
         """Fetch listings matching a SearchProfile, up to max_pages.
 
@@ -80,13 +82,40 @@ class KrishaAdapter(SourceAdapter):
 
         async with KrishaScraper(delay=self._delay, timeout=self._timeout) as scraper:
             for url in urls:
-                page_apts = await self._fetch_pages(scraper, url, max_pages)
+                page_apts = await self._fetch_pages(scraper, url, max_pages, known_ids=known_ids)
                 for apt in page_apts:
                     if apt.source_id not in seen:
                         seen.add(apt.source_id)
                         apartments.append(apt)
 
         log.info("Krisha: fetch complete — %d apartments collected", len(apartments))
+
+        # Post-filter by polygons if provided
+        if profile.polygons:
+            filtered_apartments = []
+            for apt in apartments:
+                if apt.lat is not None and apt.lon is not None:
+                    # Keep if it is inside ANY of the provided polygons
+                    in_any = any(
+                        KrishaAdapter._is_point_in_polygon(apt.lat, apt.lon, poly)
+                        for poly in profile.polygons
+                    )
+                    if in_any:
+                        filtered_apartments.append(apt)
+            log.info("Krisha: %d apartments remained after polygon filter", len(filtered_apartments))
+            return filtered_apartments
+
+        # Fallback to deprecated bounding_box filter
+        if profile.bounding_box and len(profile.bounding_box) == 4:
+            lat_min, lon_min, lat_max, lon_max = profile.bounding_box
+            filtered_apartments = []
+            for apt in apartments:
+                if apt.lat is not None and apt.lon is not None:
+                    if lat_min <= apt.lat <= lat_max and lon_min <= apt.lon <= lon_max:
+                        filtered_apartments.append(apt)
+            log.info("Krisha: %d apartments remained after bounding box filter", len(filtered_apartments))
+            return filtered_apartments
+
         return apartments
 
     async def get_details(self, source_id: str) -> Apartment | None:
@@ -106,6 +135,7 @@ class KrishaAdapter(SourceAdapter):
         scraper: KrishaScraper,
         start_url: str,
         max_pages: int,
+        known_ids: set[str] | None = None,
     ) -> list[Apartment]:
         """Paginate through listings starting from *start_url*."""
         log.info("Krisha: starting fetch from %s (max %s pages)", start_url, max_pages or "∞")
@@ -127,6 +157,10 @@ class KrishaAdapter(SourceAdapter):
             if not ad_urls:
                 break
 
+            # Extract source_id from each URL and filter known
+            page_ids = [self._url_to_source_id(u) for u in ad_urls]
+            new_urls = [u for u, sid in zip(ad_urls, page_ids) if sid and (known_ids is None or sid not in known_ids)]
+
             # Detail pages are independent; bounded fan-out keeps fetches polite.
             sem = asyncio.Semaphore(10)
 
@@ -137,7 +171,16 @@ class KrishaAdapter(SourceAdapter):
                         return None
                     return parse_detail_page(detail_html, detail_url)
 
-            tasks = [_fetch_detail(u) for u in ad_urls]
+            if known_ids is not None:
+                new_count = len(new_urls)
+                log.info("Krisha: page %d — %d new / %d total ads", page_num, new_count, len(ad_urls))
+                if new_count == 0:
+                    log.info("Krisha: all ads on this page already known — stopping early")
+                    break
+                # Only fetch details for new ones
+                tasks = [_fetch_detail(u) for u in new_urls]
+            else:
+                tasks = [_fetch_detail(u) for u in ad_urls]
             results = await asyncio.gather(*tasks)
 
             for apt in results:
@@ -156,6 +199,11 @@ class KrishaAdapter(SourceAdapter):
 
         return apartments
 
+    @staticmethod
+    def _url_to_source_id(url: str) -> str | None:
+        m = re.search(r'/a/show/(\d+)', url)
+        return f"krisha:{m.group(1)}" if m else None
+
     # ── URL builder ───────────────────────────────────────────────────
 
     @staticmethod
@@ -166,7 +214,8 @@ class KrishaAdapter(SourceAdapter):
         each district (Krisha does not support multi-district in a single
         query).  Returns a list with at least one URL.
         """
-        districts = profile.districts or [None]
+        raw = profile.districts or []
+        districts: list[str | None] = list(raw) if raw else [None]
         urls: list[str] = []
         for district in districts:
             url = KrishaAdapter._build_search_url(profile, district_override=district)
@@ -224,17 +273,41 @@ class KrishaAdapter(SourceAdapter):
             parts.append(f"das[price][to]={profile.price_max}")
         if profile.owner_only:
             parts.append("das[who]=1")
-        if profile.bounding_box and len(profile.bounding_box) == 4:
-            lat_min, lon_min, lat_max, lon_max = profile.bounding_box
-            points = [
-                f"{lat_min},{lon_min}",
-                f"{lat_max},{lon_min}",
-                f"{lat_max},{lon_max}",
-                f"{lat_min},{lon_max}",
-            ]
-            areas_str = "p" + ",".join(points)
-            parts.append(f"areas={areas_str}")
+        # Pass the first polygon as a server-side geographic filter.
+        # Krisha accepts areas=p{lat1},{lon1},{lat2},{lon2},... and returns only
+        # listings within that polygon, which avoids fetching thousands of
+        # city-wide ads and then post-filtering them.
+        if profile.polygons:
+            poly = profile.polygons[0]
+            coords = ",".join(f"{pt[0]},{pt[1]}" for pt in poly)
+            # Ensure closed polygon (Krisha expects first == last point)
+            first, last = poly[0], poly[-1]
+            if first[0] != last[0] or first[1] != last[1]:
+                coords += f",{first[0]},{first[1]}"
+            parts.append(f"areas=p{coords}")
 
         if parts:
             return base + "?" + "&".join(parts)
         return base
+
+    @staticmethod
+    def _is_point_in_polygon(x: float, y: float, poly: list[list[float]]) -> bool:
+        """
+        Ray-casting algorithm to determine if a point (x, y) is inside a polygon.
+        x corresponds to latitude, y corresponds to longitude.
+        poly is a list of [lat, lon] points.
+        """
+        n = len(poly)
+        inside = False
+        p1x, p1y = poly[0]
+        for i in range(1, n + 1):
+            p2x, p2y = poly[i % n]
+            if y > min(p1y, p2y):
+                if y <= max(p1y, p2y):
+                    if x <= max(p1x, p2x):
+                        if p1y != p2y:
+                            xinters = (y - p1y) * (p2x - p1x) / (p2y - p1y) + p1x
+                        if p1x == p2x or x <= xinters:
+                            inside = not inside
+            p1x, p1y = p2x, p2y
+        return inside
