@@ -3,7 +3,7 @@
 > [!WARNING]
 > **Legal Disclaimer:** This is a private automation tool for personal use only. By using this software, you agree to the [Legal Disclaimer and Fair Use Policy](LEGAL.md).
 
-Apartment Hunter is a powerful aggregator and search platform for rental apartments. It automates finding, filtering, and scoring housing options across various sources (like krisha.kz) without manually checking the websites every hour. It supports precise polygon-based geographic search, semantic text search (RAG), and LLM-powered quality scoring.
+Apartment Hunter is a powerful aggregator and search platform for rental apartments. It automates finding, filtering, and scoring housing options without manually checking websites every hour. **Currently, the system only supports data from `krisha.kz`**, but the architecture allows for easy extension. It supports precise polygon-based geographic search, semantic text search (RAG), and LLM-powered quality scoring.
 
 ## Quick Start
 
@@ -15,12 +15,26 @@ uv run apartment-hunter-mcp
 uv run apartment-hunter-ingest
 ```
 
+### AI Skills
+The project includes specialized AI skills in `.agents/skills` to enhance your AI assistant:
+- **apartment-search**: Domain workflow for apartment search, ingestion, monitoring, and translating listing jargon.
+- **city-district-context-kz**: Provides context on Kazakhstan cities and districts (transport, pricing, livability).
+- **html-report-generator**: Generates a visual HTML report of apartments with photos and links, and launches it on localhost.
+
+**How to use skills:**
+You don't need to manually install these skills. Simply open this project folder using your favorite AI CLI (like Antigravity CLI / Codex CLI) and the agent will automatically discover and load the skills from the local workspace.
+
+
 ## Use Cases
 
 - **Agents / MCP:** Connect it to Codex Desktop to chat with your apartment database ("Show me 2-bedroom apartments near Megapark under 500k, sort by newest").
 - **Precise Geography:** Stop relying on inaccurate text search. Draw a polygon on a map, pass the coordinates, and only get apartments strictly within that exact boundary.
 - **AI Scoring:** Automatically rate apartments out of 10 based on renovation quality, furniture condition, and specific user preferences using Vision LLMs.
 - **Market Monitoring:** Run ingestion periodically (e.g. via cron) to track price drops and immediately catch new listings before they are rented out.
+
+## Architecture Philosophy
+
+This is a **Library-First** project. The core logic is built as a reusable, source-agnostic Python library. All site-specific scraping and adapters are isolated plugins, ensuring the core remains stable and extensible.
 
 ## License
 
