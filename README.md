@@ -24,7 +24,6 @@ The project includes specialized AI skills in `.agents/skills` to enhance your A
 **How to use skills:**
 You don't need to manually install these skills. Simply open this project folder using your favorite AI CLI (like Antigravity CLI / Codex CLI) and the agent will automatically discover and load the skills from the local workspace.
 
-
 ## Use Cases
 
 - **Agents / MCP:** Connect it to Codex Desktop to chat with your apartment database ("Show me 2-bedroom apartments near Megapark under 500k, sort by newest").
