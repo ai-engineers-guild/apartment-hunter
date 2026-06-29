@@ -38,7 +38,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest", "pytest-asyncio", "pytest-cov", "pytest-mock", "respx", "mypy", "black", "ruff"]
+dev = ["pytest", "pytest-asyncio", "pytest-cov", "pytest-mock", "respx", "mypy", "ruff"]
+test = ["pytest", "pytest-asyncio", "pytest-cov", "pytest-mock", "respx"]
+lint = ["mypy", "ruff"]
 postgres = ["psycopg[binary]>=3.1"]
 qdrant = ["qdrant-client>=1.7"]
 supabase = ["supabase>=2.3"]
