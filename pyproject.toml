@@ -35,6 +35,7 @@ dependencies = [
     "tqdm>=4.66",
     "cloakbrowser>=0.4.4",
     "playwright>=1.60.0",
+    "colorlog>=6.0",
 ]
 
 [project.optional-dependencies]
