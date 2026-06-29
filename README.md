@@ -1,5 +1,8 @@
 # Apartment Hunter
 
+> [!WARNING]
+> **Legal Disclaimer:** This is a private automation tool for personal use only. By using this software, you agree to the [Legal Disclaimer and Fair Use Policy](LEGAL.md).
+
 Rental apartment aggregator with MCP server, polygon-based geographic search,
 vector similarity search, and optional LLM-powered scoring.
 Built for the Kazakhstan market (krisha.kz), extensible to other sources.
