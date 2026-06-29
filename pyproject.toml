@@ -82,6 +82,7 @@ exclude = [
     "src/apartment_hunter/storage/connectors/postgres.*",
     "src/apartment_hunter/storage/connectors/supabase.*",
     "src/apartment_hunter/storage/connectors/qdrant.*",
+    "build/.*",
 ]
 
 [[tool.mypy.overrides]]
