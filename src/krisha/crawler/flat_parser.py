@@ -40,12 +40,7 @@ class FlatParser:
     @staticmethod
     def _get_adverts(pars_data: dict, key: str) -> dict:
         adverts = pars_data.get(key)
-        if (
-            not isinstance(adverts, list)
-            or not adverts
-            or not isinstance(adverts[0], dict)
-            or not adverts[0]
-        ):
+        if not isinstance(adverts, list) or not adverts or not isinstance(adverts[0], dict) or not adverts[0]:
             raise ValueError(msg.CR_KEY_DATA_ERROR.format(key))
         return adverts[0]
 

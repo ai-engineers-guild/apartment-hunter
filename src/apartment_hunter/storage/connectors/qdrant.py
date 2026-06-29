@@ -20,9 +20,7 @@ class QdrantVectorStore(VectorStoreABC):
             from qdrant_client import QdrantClient
             from qdrant_client.models import Distance, VectorParams
         except ImportError:
-            raise ImportError(
-                "qdrant-client is required for QdrantVectorStore. Run: pip install qdrant-client"
-            )
+            raise ImportError("qdrant-client is required for QdrantVectorStore. Run: pip install qdrant-client")
 
         self.client = QdrantClient(url=url, api_key=api_key)
         self.collection_name = "apartments"
@@ -54,9 +52,7 @@ class QdrantVectorStore(VectorStoreABC):
             return
 
         meta = apt.to_search_metadata()
-        clean_meta = {
-            k: v for k, v in meta.items() if isinstance(v, (str, int, float, bool))
-        }
+        clean_meta = {k: v for k, v in meta.items() if isinstance(v, (str, int, float, bool))}
 
         try:
             # We need a numeric or UUID ID for Qdrant, source_id might be "krisha:123"
@@ -74,9 +70,7 @@ class QdrantVectorStore(VectorStoreABC):
         except Exception as e:
             log.error("Failed to upsert to Qdrant: %s", e)
 
-    def semantic_search(
-        self, query: str, n_results: int = 10, where: dict | None = None
-    ) -> list[str]:
+    def semantic_search(self, query: str, n_results: int = 10, where: dict | None = None) -> list[str]:
         """Search by natural language query. Returns source_ids."""
         from qdrant_client.models import FieldCondition, Filter, MatchValue
 
@@ -95,9 +89,7 @@ class QdrantVectorStore(VectorStoreABC):
             conditions = []
             for key, val in where.items():
                 if isinstance(val, dict) and "$eq" in val:
-                    conditions.append(
-                        FieldCondition(key=key, match=MatchValue(value=val["$eq"]))
-                    )
+                    conditions.append(FieldCondition(key=key, match=MatchValue(value=val["$eq"])))
             if conditions:
                 query_filter = Filter(must=conditions)
 
@@ -108,11 +100,7 @@ class QdrantVectorStore(VectorStoreABC):
                 query_filter=query_filter,
                 limit=n_results,
             )
-            return [
-                hit.payload["source_id"]
-                for hit in results
-                if hit.payload and "source_id" in hit.payload
-            ]
+            return [hit.payload["source_id"] for hit in results if hit.payload and "source_id" in hit.payload]
         except Exception as e:
             log.error("Qdrant search failed: %s", e)
             return []

@@ -48,9 +48,7 @@ async def test_vision_analyzer_happy_path_uses_first_three_images(mocker) -> Non
         side_effect=[b"a", b"b", b"c"],
     )
     model = mocker.MagicMock()
-    model.generate_content_async = mocker.AsyncMock(
-        return_value=types.SimpleNamespace(text=" Светло и аккуратно ")
-    )
+    model.generate_content_async = mocker.AsyncMock(return_value=types.SimpleNamespace(text=" Светло и аккуратно "))
     mocker.patch.object(analyzer, "_init_client", return_value=model)
 
     result = await analyzer.analyze_photos(apt)

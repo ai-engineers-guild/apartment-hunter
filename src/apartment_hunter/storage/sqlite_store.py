@@ -144,12 +144,8 @@ class SQLiteStore(StorageBackend):
             "llm_score": apt.llm_score,
             "llm_renovation_quality": apt.llm_renovation_quality,
             "llm_visual_description": apt.llm_visual_description,
-            "llm_pros": (
-                json.dumps(apt.llm_pros, ensure_ascii=False) if apt.llm_pros else None
-            ),
-            "llm_cons": (
-                json.dumps(apt.llm_cons, ensure_ascii=False) if apt.llm_cons else None
-            ),
+            "llm_pros": (json.dumps(apt.llm_pros, ensure_ascii=False) if apt.llm_pros else None),
+            "llm_cons": (json.dumps(apt.llm_cons, ensure_ascii=False) if apt.llm_cons else None),
             "is_new": 1 if apt.is_new else 0,
         }
 
@@ -237,9 +233,7 @@ class SQLiteStore(StorageBackend):
 
     def get_apartment(self, source_id: str) -> Apartment | None:
         with self._connect() as conn:
-            row = conn.execute(
-                "SELECT * FROM apartments WHERE source_id = ?", (source_id,)
-            ).fetchone()
+            row = conn.execute("SELECT * FROM apartments WHERE source_id = ?", (source_id,)).fetchone()
             return self._row_to_apt(row) if row else None
 
     def get_all_source_ids(self) -> set[str]:
@@ -315,16 +309,14 @@ class SQLiteStore(StorageBackend):
         today = datetime.now(UTC).strftime("%Y-%m-%d")
         with self._connect() as conn:
             conn.execute(
-                "INSERT OR IGNORE INTO price_history (apartment_id, price, recorded_at) "
-                "VALUES (?, ?, ?)",
+                "INSERT OR IGNORE INTO price_history (apartment_id, price, recorded_at) VALUES (?, ?, ?)",
                 (source_id, price, today),
             )
 
     def get_price_history(self, source_id: str) -> list[dict]:
         with self._connect() as conn:
             rows = conn.execute(
-                "SELECT price, recorded_at FROM price_history "
-                "WHERE apartment_id = ? ORDER BY recorded_at",
+                "SELECT price, recorded_at FROM price_history WHERE apartment_id = ? ORDER BY recorded_at",
                 (source_id,),
             ).fetchall()
             return [{"price": r["price"], "date": r["recorded_at"]} for r in rows]
@@ -335,16 +327,13 @@ class SQLiteStore(StorageBackend):
         config_json = json.dumps(profile.to_dict(), ensure_ascii=False)
         with self._connect() as conn:
             conn.execute(
-                "INSERT OR REPLACE INTO search_profiles (id, name, config, active) "
-                "VALUES (?, ?, ?, ?)",
+                "INSERT OR REPLACE INTO search_profiles (id, name, config, active) VALUES (?, ?, ?, ?)",
                 (profile.id, profile.name, config_json, 1 if profile.active else 0),
             )
 
     def get_profile(self, profile_id: str) -> SearchProfile | None:
         with self._connect() as conn:
-            row = conn.execute(
-                "SELECT config FROM search_profiles WHERE id = ?", (profile_id,)
-            ).fetchone()
+            row = conn.execute("SELECT config FROM search_profiles WHERE id = ?", (profile_id,)).fetchone()
             if row:
                 return SearchProfile.from_dict(json.loads(row["config"]))
         return None
@@ -359,9 +348,7 @@ class SQLiteStore(StorageBackend):
 
     def delete_profile(self, profile_id: str) -> bool:
         with self._connect() as conn:
-            cursor = conn.execute(
-                "DELETE FROM search_profiles WHERE id = ?", (profile_id,)
-            )
+            cursor = conn.execute("DELETE FROM search_profiles WHERE id = ?", (profile_id,))
             return cursor.rowcount > 0
 
     # ── Notifications ─────────────────────────────────────────────────
@@ -369,16 +356,14 @@ class SQLiteStore(StorageBackend):
     def mark_notified(self, source_id: str, profile_id: str, channel: str) -> None:
         with self._connect() as conn:
             conn.execute(
-                "INSERT OR IGNORE INTO notifications_log "
-                "(apartment_id, profile_id, channel) VALUES (?, ?, ?)",
+                "INSERT OR IGNORE INTO notifications_log (apartment_id, profile_id, channel) VALUES (?, ?, ?)",
                 (source_id, profile_id, channel),
             )
 
     def was_notified(self, source_id: str, profile_id: str, channel: str) -> bool:
         with self._connect() as conn:
             row = conn.execute(
-                "SELECT 1 FROM notifications_log "
-                "WHERE apartment_id = ? AND profile_id = ? AND channel = ?",
+                "SELECT 1 FROM notifications_log WHERE apartment_id = ? AND profile_id = ? AND channel = ?",
                 (source_id, profile_id, channel),
             ).fetchone()
             return row is not None
@@ -388,21 +373,13 @@ class SQLiteStore(StorageBackend):
     def get_stats(self) -> dict[str, Any]:
         with self._connect() as conn:
             total = conn.execute("SELECT COUNT(*) c FROM apartments").fetchone()["c"]
-            new = conn.execute(
-                "SELECT COUNT(*) c FROM apartments WHERE is_new = 1"
-            ).fetchone()["c"]
-            analyzed = conn.execute(
-                "SELECT COUNT(*) c FROM apartments WHERE llm_score IS NOT NULL"
-            ).fetchone()["c"]
-            avg_price = conn.execute(
-                "SELECT AVG(price) a FROM apartments WHERE price > 0"
-            ).fetchone()["a"]
-            avg_score = conn.execute(
-                "SELECT AVG(llm_score) a FROM apartments WHERE llm_score IS NOT NULL"
-            ).fetchone()["a"]
-            profiles = conn.execute(
-                "SELECT COUNT(*) c FROM search_profiles WHERE active = 1"
-            ).fetchone()["c"]
+            new = conn.execute("SELECT COUNT(*) c FROM apartments WHERE is_new = 1").fetchone()["c"]
+            analyzed = conn.execute("SELECT COUNT(*) c FROM apartments WHERE llm_score IS NOT NULL").fetchone()["c"]
+            avg_price = conn.execute("SELECT AVG(price) a FROM apartments WHERE price > 0").fetchone()["a"]
+            avg_score = conn.execute("SELECT AVG(llm_score) a FROM apartments WHERE llm_score IS NOT NULL").fetchone()[
+                "a"
+            ]
+            profiles = conn.execute("SELECT COUNT(*) c FROM search_profiles WHERE active = 1").fetchone()["c"]
             cities = conn.execute(
                 "SELECT city, COUNT(*) c FROM apartments GROUP BY city ORDER BY c DESC LIMIT 5"
             ).fetchall()

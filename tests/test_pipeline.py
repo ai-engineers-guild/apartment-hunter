@@ -85,9 +85,7 @@ async def test_pipeline_handles_missing_and_failing_sources(mocker, mock_db, moc
 
 
 @pytest.mark.asyncio
-async def test_pipeline_analysis_and_notifications_are_resilient(
-    mocker, mock_db, mock_vector, mock_notifier
-) -> None:
+async def test_pipeline_analysis_and_notifications_are_resilient(mocker, mock_db, mock_vector, mock_notifier) -> None:
     first = Apartment(
         source_id="krisha:10",
         source="krisha",

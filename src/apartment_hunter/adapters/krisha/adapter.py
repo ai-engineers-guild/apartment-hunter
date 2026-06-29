@@ -66,7 +66,10 @@ class KrishaAdapter(SourceAdapter):
         return "krisha.kz"
 
     async def fetch_listings(
-        self, profile: SearchProfile, *, max_pages: int = 5,
+        self,
+        profile: SearchProfile,
+        *,
+        max_pages: int = 5,
         known_ids: set[str] | None = None,
     ) -> list[Apartment]:
         """Fetch listings matching a SearchProfile, up to max_pages.
@@ -97,8 +100,7 @@ class KrishaAdapter(SourceAdapter):
                 if apt.lat is not None and apt.lon is not None:
                     # Keep if it is inside ANY of the provided polygons
                     in_any = any(
-                        KrishaAdapter._is_point_in_polygon(apt.lat, apt.lon, poly)
-                        for poly in profile.polygons
+                        KrishaAdapter._is_point_in_polygon(apt.lat, apt.lon, poly) for poly in profile.polygons
                     )
                     if in_any:
                         filtered_apartments.append(apt)
@@ -201,7 +203,7 @@ class KrishaAdapter(SourceAdapter):
 
     @staticmethod
     def _url_to_source_id(url: str) -> str | None:
-        m = re.search(r'/a/show/(\d+)', url)
+        m = re.search(r"/a/show/(\d+)", url)
         return f"krisha:{m.group(1)}" if m else None
 
     # ── URL builder ───────────────────────────────────────────────────
@@ -223,9 +225,7 @@ class KrishaAdapter(SourceAdapter):
         return urls
 
     @staticmethod
-    def _build_search_url(
-        profile: SearchProfile, *, district_override: str | None = None
-    ) -> str:
+    def _build_search_url(profile: SearchProfile, *, district_override: str | None = None) -> str:
         """Build a krisha.kz search URL from a SearchProfile."""
         # City slug
         city_slug = ""

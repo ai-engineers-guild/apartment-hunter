@@ -27,10 +27,7 @@ class VisionAnalyzer:
         import google.generativeai as genai
 
         if not self.settings.gemini_api_key:
-            raise ValueError(
-                "gemini_api_key is required for VisionAnalyzer "
-                "(ensure it is in .env)"
-            )
+            raise ValueError("gemini_api_key is required for VisionAnalyzer (ensure it is in .env)")
 
         genai.configure(api_key=self.settings.gemini_api_key)
 

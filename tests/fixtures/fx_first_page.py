@@ -30,11 +30,7 @@ first_page_test_data = [
         },
     ),
     (
-        (
-            "https://krisha.kz/arenda/kvartiry/almaty/"
-            "?das[live.rooms]=1"
-            "&das[price][to]=300000"
-        ),
+        ("https://krisha.kz/arenda/kvartiry/almaty/?das[live.rooms]=1&das[price][to]=300000"),
         {
             "city": 1,
             "rooms": [1],
@@ -93,12 +89,7 @@ first_page_test_data = [
         },
     ),
     (
-        (
-            "https://krisha.kz/arenda/kvartiry/shymkent/"
-            "?das[live.rooms]=4"
-            "&das[price][from]=400000"
-            "&das[price][to]=100000"
-        ),
+        ("https://krisha.kz/arenda/kvartiry/shymkent/?das[live.rooms]=4&das[price][from]=400000&das[price][to]=100000"),
         {
             "city": 3,
             "has_photo": "TEST_NON_PHOTO",

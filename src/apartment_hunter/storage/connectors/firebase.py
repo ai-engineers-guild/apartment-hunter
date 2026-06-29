@@ -17,16 +17,12 @@ class FirebaseStore(StorageBackend):
 
     def __init__(self, cred_path: str | None) -> None:
         if not cred_path:
-            raise ValueError(
-                "firebase_cred_path must be set when using firebase backend"
-            )
+            raise ValueError("firebase_cred_path must be set when using firebase backend")
         try:
             import firebase_admin
             from firebase_admin import credentials, firestore
         except ImportError:
-            raise ImportError(
-                "firebase-admin is required. Run: pip install firebase-admin"
-            )
+            raise ImportError("firebase-admin is required. Run: pip install firebase-admin")
 
         if not firebase_admin._apps:
             cred = credentials.Certificate(cred_path)
@@ -106,18 +102,10 @@ class FirebaseStore(StorageBackend):
         for d in results:
             match = True
             if filters.get("rooms"):
-                match = d.rooms in (
-                    filters["rooms"]
-                    if isinstance(filters["rooms"], list)
-                    else [filters["rooms"]]
-                )
+                match = d.rooms in (filters["rooms"] if isinstance(filters["rooms"], list) else [filters["rooms"]])
             if match and filters.get("price_max") and d.price > filters["price_max"]:
                 match = False
-            if (
-                match
-                and filters.get("min_score")
-                and (d.llm_score or 0) < filters["min_score"]
-            ):
+            if match and filters.get("min_score") and (d.llm_score or 0) < filters["min_score"]:
                 match = False
             if match:
                 filtered.append(d)
@@ -127,12 +115,7 @@ class FirebaseStore(StorageBackend):
 
     def get_new_apartments(self, since_hours: int = 24) -> list[Apartment]:
         cutoff = (datetime.utcnow() - timedelta(hours=since_hours)).isoformat()
-        docs = (
-            self.db.collection("apartments")
-            .where("scraped_at", ">=", cutoff)
-            .where("is_new", "==", True)
-            .stream()
-        )
+        docs = self.db.collection("apartments").where("scraped_at", ">=", cutoff).where("is_new", "==", True).stream()
         results = []
         for doc in docs:
             d = doc.to_dict()
@@ -152,22 +135,13 @@ class FirebaseStore(StorageBackend):
         )
 
     def get_price_history(self, source_id: str) -> list[dict]:
-        docs = (
-            self.db.collection("price_history")
-            .where("apartment_id", "==", source_id)
-            .stream()
-        )
-        history = [
-            {"price": d.to_dict()["price"], "date": d.to_dict()["recorded_at"]}
-            for d in docs
-        ]
+        docs = self.db.collection("price_history").where("apartment_id", "==", source_id).stream()
+        history = [{"price": d.to_dict()["price"], "date": d.to_dict()["recorded_at"]} for d in docs]
         history.sort(key=lambda x: x["date"])
         return history
 
     def save_profile(self, profile: SearchProfile) -> None:
-        self.db.collection("search_profiles").document(profile.id).set(
-            profile.to_dict()
-        )
+        self.db.collection("search_profiles").document(profile.id).set(profile.to_dict())
 
     def get_profile(self, profile_id: str) -> SearchProfile | None:
         doc = self.db.collection("search_profiles").document(profile_id).get()
@@ -186,9 +160,7 @@ class FirebaseStore(StorageBackend):
 
     def mark_notified(self, source_id: str, profile_id: str, channel: str) -> None:
         key = f"{source_id}_{profile_id}_{channel}"
-        self.db.collection("notifications_log").document(key).set(
-            {"sent_at": datetime.utcnow().isoformat()}
-        )
+        self.db.collection("notifications_log").document(key).set({"sent_at": datetime.utcnow().isoformat()})
 
     def was_notified(self, source_id: str, profile_id: str, channel: str) -> bool:
         key = f"{source_id}_{profile_id}_{channel}"

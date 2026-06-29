@@ -151,9 +151,7 @@ class Apartment:
             lines.append(f"📐 {self.rooms} комн. · {self.area_total} м²")
         lines.append(f"💰 {self.price:,} {self.currency}".replace(",", " "))
         if self.price_per_sqm:
-            lines.append(
-                f"   ({self.price_per_sqm:,.0f} {self.currency}/м²)".replace(",", " ")
-            )
+            lines.append(f"   ({self.price_per_sqm:,.0f} {self.currency}/м²)".replace(",", " "))
         if self.floor and self.floor_total:
             lines.append(f"🏢 Этаж {self.floor}/{self.floor_total}")
         if self.address:
@@ -228,17 +226,9 @@ class SearchProfile:
             return False
         if self.price_max is not None and apt.price > self.price_max:
             return False
-        if (
-            self.area_min is not None
-            and apt.area_total
-            and apt.area_total < self.area_min
-        ):
+        if self.area_min is not None and apt.area_total and apt.area_total < self.area_min:
             return False
-        if (
-            self.area_max is not None
-            and apt.area_total
-            and apt.area_total > self.area_max
-        ):
+        if self.area_max is not None and apt.area_total and apt.area_total > self.area_max:
             return False
         if self.floor_min is not None and apt.floor and apt.floor < self.floor_min:
             return False
@@ -250,9 +240,7 @@ class SearchProfile:
             and not any(x in apt.owner_type.lower() for x in ["собственник", "хозяин", "владелец"])
         ):
             return False
-        if self.min_score is not None and (
-            apt.llm_score is None or apt.llm_score < self.min_score
-        ):
+        if self.min_score is not None and (apt.llm_score is None or apt.llm_score < self.min_score):
             return False
         # Keyword exclusions
         if self.description_must_not_contain and apt.description:

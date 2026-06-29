@@ -105,9 +105,7 @@ class SearchParameters:
         if type(rooms) is not list or len(rooms) == min_rooms:
             logger.warning(msg.CR_GET_ROOMS_URL.format(type(rooms), None))
             return
-        valid_rooms = sorted(
-            i for i in rooms if (type(i) is int and min_rooms < i <= max_rooms)
-        )
+        valid_rooms = sorted(i for i in rooms if (type(i) is int and min_rooms < i <= max_rooms))
         return valid_rooms if valid_rooms else None
 
 

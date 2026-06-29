@@ -33,9 +33,7 @@ class FirstPage:
         return f"{url}{price}"
 
     @staticmethod
-    def _concatenate_params_url(
-        parser: ParserConfig, city_url: str, param_urls: tuple
-    ) -> str:
+    def _concatenate_params_url(parser: ParserConfig, city_url: str, param_urls: tuple) -> str:
         full_url = parser.rent_url + city_url
         search_str = parser.sep.join(i for i in param_urls if i is not None)
         if search_str:

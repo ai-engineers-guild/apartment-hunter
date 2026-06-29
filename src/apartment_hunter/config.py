@@ -24,9 +24,7 @@ class Settings(BaseSettings):
     )
 
     # ── Backends ───────────────────────────────────────────────────────
-    storage_backend: str = (
-        "sqlite"  # "sqlite" | "postgres" | "supabase" | "firebase" | "file"
-    )
+    storage_backend: str = "sqlite"  # "sqlite" | "postgres" | "supabase" | "firebase" | "file"
     vector_backend: str = "chroma"  # "chroma" | "qdrant"
 
     # ── Paths & Local DBs ──────────────────────────────────────────────

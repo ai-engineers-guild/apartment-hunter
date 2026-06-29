@@ -36,9 +36,7 @@ def parse_detail_page(html: str, url: str) -> Apartment | None:
 
     advert: dict = jsdata.get("advert", {})
     adverts_list: list = jsdata.get("adverts", [])
-    adverts: dict = (
-        adverts_list[0] if adverts_list and isinstance(adverts_list[0], dict) else {}
-    )
+    adverts: dict = adverts_list[0] if adverts_list and isinstance(adverts_list[0], dict) else {}
 
     raw_id = advert.get("id")
     if not raw_id:

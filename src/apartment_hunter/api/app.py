@@ -175,9 +175,7 @@ def semantic_search(req: SemanticSearchRequest):
     elif len(conditions) > 1:
         where = {"$and": conditions}
 
-    source_ids = _vector.semantic_search(
-        req.query, n_results=req.n_results, where=where
-    )
+    source_ids = _vector.semantic_search(req.query, n_results=req.n_results, where=where)
     apartments = [_db.get_apartment(sid) for sid in source_ids]
     return [a.to_dict() for a in apartments if a]
 
@@ -218,9 +216,7 @@ def delete_profile(profile_id: str):
 
 
 @app.post("/ingest/run", response_model=IngestResponse)
-async def run_ingestion(
-    background_tasks: BackgroundTasks, profile_id: str | None = Query(None)
-):
+async def run_ingestion(background_tasks: BackgroundTasks, profile_id: str | None = Query(None)):
     """Run ingestion either synchronously or in background."""
     pipeline = _get_pipeline()
 
@@ -235,18 +231,14 @@ async def run_ingestion(
         )
     else:
         results = await pipeline.run_all_profiles()
-        return IngestResponse(
-            message="Ingestion completed for all active profiles", results=results
-        )
+        return IngestResponse(message="Ingestion completed for all active profiles", results=results)
 
 
 # ── Entry Point ───────────────────────────────────────────────────────────────
 
 
 def main():
-    logging.basicConfig(
-        level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s"
-    )
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     uvicorn.run(
         "apartment_hunter.api.app:app",
         host=_settings.api_host,

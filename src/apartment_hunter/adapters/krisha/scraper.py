@@ -12,6 +12,7 @@ log = logging.getLogger(__name__)
 
 _RETRY_DELAYS = (5, 15, 60, 300)
 
+
 class KrishaScraper:
     """Async scraper using CloakBrowser to bypass Cloudflare rate-limiting.
 
@@ -51,19 +52,12 @@ class KrishaScraper:
         if "--humanize=true" not in args:
             args.append("--humanize=true")
 
-        self._browser = await self._playwright.chromium.launch(
-            executable_path=exe_path,
-            headless=True,
-            args=args
-        )
+        self._browser = await self._playwright.chromium.launch(executable_path=exe_path, headless=True, args=args)
         ua = (
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
             "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
         )
-        self._context = await self._browser.new_context(
-            user_agent=ua,
-            viewport={"width": 1920, "height": 1080}
-        )
+        self._context = await self._browser.new_context(user_agent=ua, viewport={"width": 1920, "height": 1080})
 
     async def fetch(self, url: str) -> str | None:
         """Fetch a URL and return the response text, or None on failure."""
@@ -120,9 +114,7 @@ class KrishaScraper:
                 except Exception as exc:
                     log.error("Request error on %s: %s", url, exc)
                     if attempt < self._max_retries - 1:
-                        await asyncio.sleep(
-                            _RETRY_DELAYS[min(attempt, len(_RETRY_DELAYS) - 1)]
-                        )
+                        await asyncio.sleep(_RETRY_DELAYS[min(attempt, len(_RETRY_DELAYS) - 1)])
 
             log.error("Max retries exceeded for %s", url)
             return None

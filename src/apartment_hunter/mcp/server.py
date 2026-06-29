@@ -244,12 +244,7 @@ async def download_apartment_photos(source_id: str, limit: int = 3) -> str:
         return f"У квартиры {source_id} нет фотографий."
 
     # Create scratch directory
-    scratch_dir = (
-        Path(_settings.db_path).parent.parent
-        / "scratch"
-        / "photos"
-        / source_id.replace(":", "_")
-    )
+    scratch_dir = Path(_settings.db_path).parent.parent / "scratch" / "photos" / source_id.replace(":", "_")
     scratch_dir.mkdir(parents=True, exist_ok=True)
 
     urls = apt.photo_urls[:limit]
@@ -279,10 +274,7 @@ async def download_apartment_photos(source_id: str, limit: int = 3) -> str:
     if not downloaded_paths:
         return "Не удалось скачать фотографии."
 
-    lines = [
-        "✅ Фотографии успешно скачаны. "
-        "Абсолютные пути для использования в view_file:\n"
-    ]
+    lines = ["✅ Фотографии успешно скачаны. Абсолютные пути для использования в view_file:\n"]
     for path in downloaded_paths:
         lines.append(f"- {path}")
 
@@ -356,9 +348,7 @@ async def compare_apartments(source_ids: list[str]) -> str:
         ("Площадь (м²)", lambda a: str(a.area_total or "—")),
         (
             "Цена/м²",
-            lambda a: (
-                f"{a.price_per_sqm:,.0f}".replace(",", " ") if a.price_per_sqm else "—"
-            ),
+            lambda a: f"{a.price_per_sqm:,.0f}".replace(",", " ") if a.price_per_sqm else "—",
         ),
         ("Этаж", lambda a: f"{a.floor}/{a.floor_total}" if a.floor else "—"),
         ("Тип дома", lambda a: a.building_type or "—"),
@@ -396,9 +386,7 @@ async def get_price_history(source_id: str) -> str:
         diff = history[-1]["price"] - history[0]["price"]
         pct = (diff / history[0]["price"]) * 100 if history[0]["price"] else 0
         sign = "+" if diff >= 0 else ""
-        lines.append(
-            f"\nИзменение: {sign}{diff:,} KZT ({sign}{pct:.1f}%)".replace(",", " ")
-        )
+        lines.append(f"\nИзменение: {sign}{diff:,} KZT ({sign}{pct:.1f}%)".replace(",", " "))
     return "\n".join(lines)
 
 
@@ -465,10 +453,7 @@ async def create_search_profile(
     )
     _get_db().save_profile(profile)
     profile_json = json.dumps(profile.to_dict(), indent=2, ensure_ascii=False)
-    return (
-        f"✅ Профиль '{name}' создан (ID: {profile.id})\n\n"
-        f"Параметры:\n{profile_json}"
-    )
+    return f"✅ Профиль '{name}' создан (ID: {profile.id})\n\nПараметры:\n{profile_json}"
 
 
 @mcp.tool()
@@ -486,9 +471,7 @@ async def list_search_profiles() -> str:
         if p.rooms:
             lines.append(f"  Комнат: {p.rooms}")
         if p.price_min or p.price_max:
-            price_range = f"{p.price_min or 0:,} – {p.price_max or '∞':,}".replace(
-                ",", " "
-            )
+            price_range = f"{p.price_min or 0:,} – {p.price_max or '∞':,}".replace(",", " ")
             lines.append(f"  Цена: {price_range} KZT")
         if p.nl_description:
             lines.append(f"  NL-фильтр: {p.nl_description[:80]}...")
@@ -542,6 +525,7 @@ async def search_by_profile(
 
     if profile.polygons:
         from apartment_hunter.adapters.krisha.adapter import KrishaAdapter
+
         valid_apts = []
         for apt in apartments:
             if apt.lat is None or apt.lon is None:
@@ -583,9 +567,7 @@ async def search_by_profile(
         elif conditions:
             where = {"$and": conditions}
 
-        source_ids = _get_vector().semantic_search(
-            profile.nl_description, n_results=limit * 3, where=where
-        )
+        source_ids = _get_vector().semantic_search(profile.nl_description, n_results=limit * 3, where=where)
 
         apt_map = {a.source_id: a for a in apartments}
         ranked_apts = []
@@ -595,6 +577,7 @@ async def search_by_profile(
                 del apt_map[sid]
 
         remaining = list(apt_map.values())
+
         def _sort_key(a: Apartment) -> datetime:
             return a.scraped_at.replace(tzinfo=UTC) if a.scraped_at else datetime.min.replace(tzinfo=UTC)
 
@@ -633,9 +616,7 @@ async def run_ingestion(profile_id: str | None = None) -> str:
     else:
         results = await pipeline.run_all_profiles()
         if not results:
-            return (
-                "Нет активных профилей. Создайте профиль через create_search_profile."
-            )
+            return "Нет активных профилей. Создайте профиль через create_search_profile."
         lines = ["✅ Сбор данных завершён:\n"]
         for name, count in results.items():
             lines.append(f"  {name}: {count} новых квартир")
@@ -767,9 +748,7 @@ def _format_ingestion_result(profile_name: str, apartments: list[Apartment]) -> 
 
 def main() -> None:
     """Run the MCP server."""
-    logging.basicConfig(
-        level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s"
-    )
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     mcp.run()
 
 

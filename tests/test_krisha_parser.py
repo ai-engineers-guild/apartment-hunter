@@ -31,9 +31,7 @@ def test_parse_listing_page_handles_pagination_and_total() -> None:
 
 
 def test_parse_listing_page_handles_empty_results() -> None:
-    urls, total, next_url = parse_listing_page(
-        '<div class="a-search-empty">Nothing</div>'
-    )
+    urls, total, next_url = parse_listing_page('<div class="a-search-empty">Nothing</div>')
 
     assert urls == []
     assert total == 0

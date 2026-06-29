@@ -85,17 +85,11 @@ class FileStore(StorageBackend):
             for k, v in filters.items():
                 if v is None:
                     continue
-                if k == "city" and (
-                    not d.get("city") or v.lower() not in d["city"].lower()
-                ):
+                if k == "city" and (not d.get("city") or v.lower() not in d["city"].lower()):
                     match = False
-                elif k == "district" and (
-                    not d.get("district") or v.lower() not in d["district"].lower()
-                ):
+                elif k == "district" and (not d.get("district") or v.lower() not in d["district"].lower()):
                     match = False
-                elif k == "rooms" and d.get("rooms") not in (
-                    v if isinstance(v, list) else [v]
-                ):
+                elif k == "rooms" and d.get("rooms") not in (v if isinstance(v, list) else [v]):
                     match = False
                 elif k == "price_min" and d.get("price", 0) < v:
                     match = False
@@ -107,11 +101,7 @@ class FileStore(StorageBackend):
                     match = False
                 elif k == "min_score" and (d.get("llm_score") or 0) < v:
                     match = False
-                elif (
-                    k == "owner_only"
-                    and v
-                    and "собственник" not in str(d.get("owner_type", "")).lower()
-                ):
+                elif k == "owner_only" and v and "собственник" not in str(d.get("owner_type", "")).lower():
                     match = False
             if match:
                 apt = self.get_apartment(sid)
@@ -184,13 +174,9 @@ class FileStore(StorageBackend):
         return {
             "total_apartments": len(apts),
             "new_apartments": sum(1 for a in apts if a.get("is_new")),
-            "analyzed_apartments": sum(
-                1 for a in apts if a.get("llm_score") is not None
-            ),
+            "analyzed_apartments": sum(1 for a in apts if a.get("llm_score") is not None),
             "active_profiles": len(self.list_profiles(active_only=True)),
-            "avg_price": int(
-                sum(a["price"] for a in apts if a.get("price")) / max(len(apts), 1)
-            ),
+            "avg_price": int(sum(a["price"] for a in apts if a.get("price")) / max(len(apts), 1)),
             "avg_score": round(
                 sum(a["llm_score"] for a in apts if a.get("llm_score"))
                 / max(sum(1 for a in apts if a.get("llm_score")), 1),

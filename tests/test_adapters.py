@@ -161,11 +161,7 @@ async def test_krisha_adapter_get_details_returns_none_when_not_found(mocker) ->
 
 
 def test_search_profile_with_nl_description() -> None:
-    profile = SearchProfile(
-        name="Test NL",
-        city="Алматы",
-        nl_description="светлая квартира с новым ремонтом"
-    )
+    profile = SearchProfile(name="Test NL", city="Алматы", nl_description="светлая квартира с новым ремонтом")
     d = profile.to_dict()
     assert d["nl_description"] == "светлая квартира с новым ремонтом"
 

@@ -35,7 +35,7 @@ async def test_llm_analyzer_success(mocker, sample_apt) -> None:
     )
 
     analyzer = LLMAnalyzer()
-    analyzer._provider = "openai" # Force provider for test
+    analyzer._provider = "openai"  # Force provider for test
 
     mock_client = mocker.MagicMock()
     mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
@@ -63,6 +63,6 @@ async def test_llm_analyzer_fallback(mocker, sample_apt) -> None:
     # Price per sqm is 150000 / 55 = 2727 (< 4000) -> should get pros
     result = await analyzer.analyze(sample_apt)
 
-    assert result.score > 5.0 # baseline is 5.0, low price per sqm adds 1.5
+    assert result.score > 5.0  # baseline is 5.0, low price per sqm adds 1.5
     assert "Цена ниже средней" in result.pros[0]
     assert result.summary == "Автоматическая оценка на основе базовых параметров (LLM недоступна)."

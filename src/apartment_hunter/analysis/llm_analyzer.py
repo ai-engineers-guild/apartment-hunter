@@ -17,24 +17,16 @@ log = logging.getLogger(__name__)
 class LLMAnalysisResponse(BaseModel):
     """Structured response required from the LLM."""
 
-    score: float = Field(
-        ..., description="Оценка квартиры от 0.0 до 10.0 (где 10 - идеальный вариант)"
-    )
+    score: float = Field(..., description="Оценка квартиры от 0.0 до 10.0 (где 10 - идеальный вариант)")
     summary: str = Field(
         ...,
-        description=(
-            "Краткое резюме по квартире: стоит ли рассматривать, "
-            "какие главные особенности (2-3 предложения)"
-        ),
+        description=("Краткое резюме по квартире: стоит ли рассматривать, какие главные особенности (2-3 предложения)"),
     )
     pros: list[str] = Field(..., description="Список плюсов квартиры")
     cons: list[str] = Field(..., description="Список минусов или рисков квартиры")
     renovation_quality: str | None = Field(
         None,
-        description=(
-            "Оценка состояния ремонта "
-            "(например: 'Евроремонт', 'Требует ремонта', 'Бабушкин вариант')"
-        ),
+        description=("Оценка состояния ремонта (например: 'Евроремонт', 'Требует ремонта', 'Бабушкин вариант')"),
     )
 
 
@@ -54,27 +46,21 @@ class LLMAnalyzer(Analyzer):
         try:
             import instructor
         except ImportError:
-            raise ImportError(
-                "instructor is required for LLMAnalyzer. Run: pip install instructor"
-            )
+            raise ImportError("instructor is required for LLMAnalyzer. Run: pip install instructor")
 
         if self._provider == "openai":
             import openai
 
             if not self.settings.openai_api_key:
                 raise ValueError("openai_api_key is required for OpenAI")
-            self._client = instructor.from_openai(
-                openai.AsyncOpenAI(api_key=self.settings.openai_api_key)
-            )
+            self._client = instructor.from_openai(openai.AsyncOpenAI(api_key=self.settings.openai_api_key))
 
         elif self._provider == "anthropic":
             import anthropic
 
             if not self.settings.anthropic_api_key:
                 raise ValueError("anthropic_api_key is required for Anthropic")
-            self._client = instructor.from_anthropic(
-                anthropic.AsyncAnthropic(api_key=self.settings.anthropic_api_key)
-            )
+            self._client = instructor.from_anthropic(anthropic.AsyncAnthropic(api_key=self.settings.anthropic_api_key))
 
         elif self._provider == "openrouter":
             import openai
@@ -95,9 +81,7 @@ class LLMAnalyzer(Analyzer):
                 raise ValueError("gemini_api_key is required for Gemini")
             genai.configure(api_key=self.settings.gemini_api_key)
             # Instructor has a Gemini client
-            self._client = instructor.from_gemini(
-                client=genai.GenerativeModel(model_name=self._model)
-            )
+            self._client = instructor.from_gemini(client=genai.GenerativeModel(model_name=self._model))
 
         else:
             raise ValueError(f"Unsupported LLM provider: {self._provider}")
@@ -142,9 +126,7 @@ class LLMAnalyzer(Analyzer):
         if self._provider == "gemini":
             # instructor.from_gemini usually expects chat.send_message style or create
             response = await client.messages.create(
-                messages=[
-                    {"role": "user", "content": f"{sys_prompt}\n\n{user_prompt}"}
-                ],
+                messages=[{"role": "user", "content": f"{sys_prompt}\n\n{user_prompt}"}],
                 response_model=LLMAnalysisResponse,
             )
         elif self._provider == "anthropic":

@@ -85,9 +85,7 @@ class IngestPipeline:
         """Resolve sources, defaulting to all registered adapters."""
         return profile.sources or list(self.adapters.keys())
 
-    async def _fetch_source_apartments(
-        self, source_name: str, profile: SearchProfile
-    ) -> list[Apartment]:
+    async def _fetch_source_apartments(self, source_name: str, profile: SearchProfile) -> list[Apartment]:
         adapter_factory = self.adapters.get(source_name)
         if not adapter_factory:
             log.warning("No adapter for source '%s'", source_name)
@@ -100,9 +98,7 @@ class IngestPipeline:
 
         try:
             known_ids = self.db.get_all_source_ids()
-            return await adapter.fetch_listings(
-                profile, max_pages=0, known_ids=known_ids
-            )
+            return await adapter.fetch_listings(profile, max_pages=0, known_ids=known_ids)
         except Exception as exc:
             log.error("Fetch failed for %s: %s", source_name, exc)
             return []
@@ -143,9 +139,7 @@ class IngestPipeline:
                             vision_desc = await self.vision_analyzer.analyze_photos(apt)
                             apt.llm_visual_description = vision_desc
                         except Exception as exc:
-                            log.warning(
-                                "Vision analysis failed for %s: %s", apt.source_id, exc
-                            )
+                            log.warning("Vision analysis failed for %s: %s", apt.source_id, exc)
 
                     self.db.upsert_apartment(apt)
                     self.vector.upsert(apt)
@@ -154,9 +148,7 @@ class IngestPipeline:
 
         await asyncio.gather(*[_analyze_one(apt) for apt in apartments])
 
-    async def _notify_new_apartments(
-        self, profile: SearchProfile, new_apartments: list[Apartment]
-    ) -> None:
+    async def _notify_new_apartments(self, profile: SearchProfile, new_apartments: list[Apartment]) -> None:
         """Notify matching apartments through configured notifiers."""
         if not new_apartments or not self.notifiers:
             return
@@ -175,9 +167,7 @@ class IngestPipeline:
                 try:
                     sent = await notifier.notify(apt, profile)
                     if sent:
-                        self.db.mark_notified(
-                            apt.source_id, profile.id, notifier.channel_name
-                        )
+                        self.db.mark_notified(apt.source_id, profile.id, notifier.channel_name)
                 except Exception as exc:
                     log.warning("Notification failed: %s", exc)
 
@@ -187,9 +177,7 @@ class IngestPipeline:
 
 def run_once_cli() -> None:
     """CLI entry point: run all profiles once and exit."""
-    logging.basicConfig(
-        level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s"
-    )
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
     async def _run() -> None:
         pipeline = IngestPipeline()

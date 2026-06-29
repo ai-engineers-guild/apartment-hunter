@@ -12,13 +12,9 @@ RESPONSE = "Response - Status code {}"
 
 # CRAWLER
 CR_LOGGER_CONFIG_OK = "Crawler - Logging configured successfully"
-CR_LOGGER_CONFIG_WRONG = (
-    "logging config file not found, use basic config.\n    ERROR: {}"
-)
+CR_LOGGER_CONFIG_WRONG = "logging config file not found, use basic config.\n    ERROR: {}"
 LOAD_PARSER_CONFIG_OK = "Crawler - Load parser config OK"
-LOAD_SEARCH_PARAMS_ERROR = (
-    "Crawler - Load search parameters ERROR. Use basic parameters. " "\n     ERROR: {}"
-)
+LOAD_SEARCH_PARAMS_ERROR = "Crawler - Load search parameters ERROR. Use basic parameters. \n     ERROR: {}"
 LOAD_SEARCH_PARAMS_OK = "Crawler - Load search parameters OK"
 CR_START = "Crawler - START"
 CR_STOPPED = "Crawler - STOPPED"

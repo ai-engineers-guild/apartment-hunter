@@ -57,9 +57,7 @@ def test_filestore_search_apartments() -> None:
         assert len(results_almaty) == 3
 
         # Search by price and rooms
-        results_filtered = store.search_apartments(
-            city="Алматы", price_max=125000, rooms=[1, 2, 3]
-        )
+        results_filtered = store.search_apartments(city="Алматы", price_max=125000, rooms=[1, 2, 3])
         assert len(results_filtered) == 2  # test:0 (100k) and test:2 (120k)
 
 
@@ -107,6 +105,7 @@ def test_filestore_existing_apartment_is_no_longer_marked_new() -> None:
         assert store.get_apartment("test:existing") is not None
         assert store.get_apartment("test:existing").is_new is False
 
+
 def test_filestore_upsert_does_not_mutate_apartment_object() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         store = FileStore(str(Path(tmpdir) / "test_db.json"))
@@ -119,7 +118,7 @@ def test_filestore_upsert_does_not_mutate_apartment_object() -> None:
             price=150000,
             scraped_at=datetime.now(UTC),
             is_new=True,
-            llm_score=None
+            llm_score=None,
         )
 
         # Insert first time

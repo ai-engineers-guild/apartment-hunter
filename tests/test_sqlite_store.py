@@ -114,7 +114,7 @@ def test_sqlite_store_parameterized_limits(tmp_path) -> None:
 
     # Insert 10 apartments
     for i in range(10):
-        store.upsert_apartment(_apt(f"krisha:{i}", price=100000 + i*1000))
+        store.upsert_apartment(_apt(f"krisha:{i}", price=100000 + i * 1000))
 
     # search_apartments limit
     results_limit_3 = store.search_apartments(limit=3)

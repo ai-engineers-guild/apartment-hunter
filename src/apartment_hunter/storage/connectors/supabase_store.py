@@ -16,15 +16,11 @@ class SupabaseStore(StorageBackend):
 
     def __init__(self, url: str | None, key: str | None) -> None:
         if not url or not key:
-            raise ValueError(
-                "supabase_url and supabase_key must be set when using supabase backend"
-            )
+            raise ValueError("supabase_url and supabase_key must be set when using supabase backend")
         try:
             from supabase import Client, create_client
         except ImportError:
-            raise ImportError(
-                "supabase is required for SupabaseStore. Run: pip install supabase"
-            )
+            raise ImportError("supabase is required for SupabaseStore. Run: pip install supabase")
 
         self.client: Client = create_client(url, key)
         log.info("Supabase client initialized.")
@@ -33,12 +29,7 @@ class SupabaseStore(StorageBackend):
         row = apt.to_dict()
         try:
             # Check if exists
-            res = (
-                self.client.table("apartments")
-                .select("source_id")
-                .eq("source_id", apt.source_id)
-                .execute()
-            )
+            res = self.client.table("apartments").select("source_id").eq("source_id", apt.source_id).execute()
             if res.data:
                 # Exists, do not overwrite LLM fields
                 updates = {
@@ -54,9 +45,7 @@ class SupabaseStore(StorageBackend):
                         "llm_cons",
                     )
                 }
-                self.client.table("apartments").update(updates).eq(
-                    "source_id", apt.source_id
-                ).execute()
+                self.client.table("apartments").update(updates).eq("source_id", apt.source_id).execute()
                 return False
             else:
                 self.client.table("apartments").insert(row).execute()
@@ -66,12 +55,7 @@ class SupabaseStore(StorageBackend):
             return False
 
     def get_apartment(self, source_id: str) -> Apartment | None:
-        res = (
-            self.client.table("apartments")
-            .select("*")
-            .eq("source_id", source_id)
-            .execute()
-        )
+        res = self.client.table("apartments").select("*").eq("source_id", source_id).execute()
         if res.data:
             return Apartment(**res.data[0])
         return None
@@ -109,9 +93,7 @@ class SupabaseStore(StorageBackend):
     def get_new_apartments(self, since_hours: int = 24) -> list[Apartment]:
         import datetime
 
-        cutoff = (
-            datetime.datetime.utcnow() - datetime.timedelta(hours=since_hours)
-        ).isoformat()
+        cutoff = (datetime.datetime.utcnow() - datetime.timedelta(hours=since_hours)).isoformat()
         res = (
             self.client.table("apartments")
             .select("*")
@@ -136,11 +118,7 @@ class SupabaseStore(StorageBackend):
 
     def get_price_history(self, source_id: str) -> list[dict]:
         res = (
-            self.client.table("price_history")
-            .select("*")
-            .eq("apartment_id", source_id)
-            .order("recorded_at")
-            .execute()
+            self.client.table("price_history").select("*").eq("apartment_id", source_id).order("recorded_at").execute()
         )
         return [{"price": r["price"], "date": str(r["recorded_at"])} for r in res.data]
 
@@ -155,12 +133,7 @@ class SupabaseStore(StorageBackend):
         ).execute()
 
     def get_profile(self, profile_id: str) -> SearchProfile | None:
-        res = (
-            self.client.table("search_profiles")
-            .select("config")
-            .eq("id", profile_id)
-            .execute()
-        )
+        res = self.client.table("search_profiles").select("config").eq("id", profile_id).execute()
         if res.data:
             return SearchProfile.from_dict(res.data[0]["config"])
         return None
@@ -173,9 +146,7 @@ class SupabaseStore(StorageBackend):
         return [SearchProfile.from_dict(row["config"]) for row in res.data]
 
     def delete_profile(self, profile_id: str) -> bool:
-        res = (
-            self.client.table("search_profiles").delete().eq("id", profile_id).execute()
-        )
+        res = self.client.table("search_profiles").delete().eq("id", profile_id).execute()
         return len(res.data) > 0
 
     def mark_notified(self, source_id: str, profile_id: str, channel: str) -> None:

@@ -83,9 +83,7 @@ class PostgresStore(StorageBackend):
         if not dsn:
             raise ValueError("postgres_dsn must be set when using postgres backend")
         if importlib.util.find_spec("psycopg") is None:
-            raise ImportError(
-                "psycopg[binary] is required for PostgresStore. Run: pip install psycopg[binary]"
-            )
+            raise ImportError("psycopg[binary] is required for PostgresStore. Run: pip install psycopg[binary]")
 
         self.dsn = dsn
         self._init_db()
@@ -111,12 +109,8 @@ class PostgresStore(StorageBackend):
         row = apt.to_dict()
         # Convert lists to JSON strings for JSONB if needed, or psycopg handles lists directly
         row["photo_urls"] = json.dumps(row["photo_urls"], ensure_ascii=False)
-        row["llm_pros"] = (
-            json.dumps(row["llm_pros"], ensure_ascii=False) if row["llm_pros"] else None
-        )
-        row["llm_cons"] = (
-            json.dumps(row["llm_cons"], ensure_ascii=False) if row["llm_cons"] else None
-        )
+        row["llm_pros"] = json.dumps(row["llm_pros"], ensure_ascii=False) if row["llm_pros"] else None
+        row["llm_cons"] = json.dumps(row["llm_cons"], ensure_ascii=False) if row["llm_cons"] else None
         if not self.get_apartment(apt.source_id):
             row["is_new"] = True
         else:
@@ -178,9 +172,7 @@ class PostgresStore(StorageBackend):
 
     def get_apartment(self, source_id: str) -> Apartment | None:
         with self._conn() as conn:
-            row = conn.execute(
-                "SELECT * FROM apartments WHERE source_id = %s", (source_id,)
-            ).fetchone()
+            row = conn.execute("SELECT * FROM apartments WHERE source_id = %s", (source_id,)).fetchone()
             return self._row_to_apt(row) if row else None
 
     def search_apartments(self, **filters: Any) -> list[Apartment]:
@@ -232,10 +224,7 @@ class PostgresStore(StorageBackend):
     def record_price(self, source_id: str, price: int) -> None:
         with self._conn() as conn:
             conn.execute(
-                (
-                    "INSERT INTO price_history (apartment_id, price) "
-                    "VALUES (%s, %s) ON CONFLICT DO NOTHING"
-                ),
+                ("INSERT INTO price_history (apartment_id, price) VALUES (%s, %s) ON CONFLICT DO NOTHING"),
                 (source_id, price),
             )
             conn.commit()
@@ -243,10 +232,7 @@ class PostgresStore(StorageBackend):
     def get_price_history(self, source_id: str) -> list[dict]:
         with self._conn() as conn:
             rows = conn.execute(
-                (
-                    "SELECT price, recorded_at FROM price_history "
-                    "WHERE apartment_id = %s ORDER BY recorded_at"
-                ),
+                ("SELECT price, recorded_at FROM price_history WHERE apartment_id = %s ORDER BY recorded_at"),
                 (source_id,),
             ).fetchall()
             return [{"price": r["price"], "date": str(r["recorded_at"])} for r in rows]
@@ -271,14 +257,10 @@ class PostgresStore(StorageBackend):
 
     def get_profile(self, profile_id: str) -> SearchProfile | None:
         with self._conn() as conn:
-            row = conn.execute(
-                "SELECT config FROM search_profiles WHERE id = %s", (profile_id,)
-            ).fetchone()
+            row = conn.execute("SELECT config FROM search_profiles WHERE id = %s", (profile_id,)).fetchone()
             if row:
                 return SearchProfile.from_dict(
-                    row["config"]
-                    if isinstance(row["config"], dict)
-                    else json.loads(row["config"])
+                    row["config"] if isinstance(row["config"], dict) else json.loads(row["config"])
                 )
         return None
 
@@ -289,19 +271,13 @@ class PostgresStore(StorageBackend):
                 q += " WHERE active = TRUE"
             rows = conn.execute(q).fetchall()
             return [
-                SearchProfile.from_dict(
-                    r["config"]
-                    if isinstance(r["config"], dict)
-                    else json.loads(r["config"])
-                )
+                SearchProfile.from_dict(r["config"] if isinstance(r["config"], dict) else json.loads(r["config"]))
                 for r in rows
             ]
 
     def delete_profile(self, profile_id: str) -> bool:
         with self._conn() as conn:
-            cursor = conn.execute(
-                "DELETE FROM search_profiles WHERE id = %s", (profile_id,)
-            )
+            cursor = conn.execute("DELETE FROM search_profiles WHERE id = %s", (profile_id,))
             conn.commit()
             return cursor.rowcount > 0
 
@@ -320,10 +296,7 @@ class PostgresStore(StorageBackend):
     def was_notified(self, source_id: str, profile_id: str, channel: str) -> bool:
         with self._conn() as conn:
             row = conn.execute(
-                (
-                    "SELECT 1 FROM notifications_log "
-                    "WHERE apartment_id = %s AND profile_id = %s AND channel = %s"
-                ),
+                ("SELECT 1 FROM notifications_log WHERE apartment_id = %s AND profile_id = %s AND channel = %s"),
                 (source_id, profile_id, channel),
             ).fetchone()
             return row is not None
@@ -331,15 +304,9 @@ class PostgresStore(StorageBackend):
     def get_stats(self) -> dict[str, Any]:
         with self._conn() as conn:
             total = conn.execute("SELECT COUNT(*) as c FROM apartments").fetchone()["c"]
-            new = conn.execute(
-                "SELECT COUNT(*) as c FROM apartments WHERE is_new = TRUE"
-            ).fetchone()["c"]
-            analyzed = conn.execute(
-                "SELECT COUNT(*) as c FROM apartments WHERE llm_score IS NOT NULL"
-            ).fetchone()["c"]
-            avg_price = conn.execute(
-                "SELECT AVG(price) as a FROM apartments WHERE price > 0"
-            ).fetchone()["a"]
+            new = conn.execute("SELECT COUNT(*) as c FROM apartments WHERE is_new = TRUE").fetchone()["c"]
+            analyzed = conn.execute("SELECT COUNT(*) as c FROM apartments WHERE llm_score IS NOT NULL").fetchone()["c"]
+            avg_price = conn.execute("SELECT AVG(price) as a FROM apartments WHERE price > 0").fetchone()["a"]
             avg_score = conn.execute(
                 "SELECT AVG(llm_score) as a FROM apartments WHERE llm_score IS NOT NULL"
             ).fetchone()["a"]
