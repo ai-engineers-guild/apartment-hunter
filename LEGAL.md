@@ -1,10 +1,10 @@
 # Legal Disclaimer and Fair Use Policy
 
 ## 1. Personal Automation Tool
-This project is a **Personal Automation Tool** developed strictly for private, non-commercial use. Its sole purpose is to help individuals automate the tedious manual process of searching for personal housing. 
+This project is a **Personal Automation Tool** developed strictly for private, non-commercial use. Its sole purpose is to help individuals automate the tedious manual process of searching for personal housing.
 
 ## 2. Fair Use
-This software operates under the principles of **Fair Use**. It acts as a user agent that mimics human browsing behavior for personal productivity. 
+This software operates under the principles of **Fair Use**. It acts as a user agent that mimics human browsing behavior for personal productivity.
 - It does **not** bypass security controls or authorization screens to access hidden data.
 - It does **not** collect, store, or distribute personally identifiable information (PII).
 - It does **not** scrape data for resale, commercial aggregation, or to create a competing product.
