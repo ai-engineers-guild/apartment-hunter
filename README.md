@@ -3,7 +3,7 @@
 > [!WARNING]
 > **Legal Disclaimer:** This is a private automation tool for personal use only. By using this software, you agree to the [Legal Disclaimer and Fair Use Policy](LEGAL.md).
 
-Apartment Hunter is a powerful aggregator and search platform for rental apartments. It automates finding, filtering, and scoring housing options across various sources (like krisha.kz) without manually checking the websites every hour. It supports precise polygon-based geographic search, semantic text search (RAG), and LLM-powered quality scoring.
+Apartment Hunter is a powerful aggregator and search platform for rental apartments. It automates finding, filtering, and scoring housing options without manually checking websites every hour. **Currently, the system only supports data from `krisha.kz`**, but the architecture allows for easy extension. It supports precise polygon-based geographic search, semantic text search (RAG), and LLM-powered quality scoring.
 
 ## Quick Start
 
@@ -20,6 +20,9 @@ The project includes specialized AI skills in `.agents/skills` to enhance your A
 - **apartment-search**: Domain workflow for apartment search, ingestion, monitoring, and translating listing jargon.
 - **city-district-context-kz**: Provides context on Kazakhstan cities and districts (transport, pricing, livability).
 - **html-report-generator**: Generates a visual HTML report of apartments with photos and links, and launches it on localhost.
+
+**How to use skills:**
+You don't need to manually install these skills. Simply open this project folder using your favorite AI CLI (like Antigravity CLI / Codex CLI) and the agent will automatically discover and load the skills from the local workspace.
 
 
 ## Use Cases
