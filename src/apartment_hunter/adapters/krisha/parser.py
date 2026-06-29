@@ -129,7 +129,7 @@ def parse_listing_page(html: str) -> tuple[list[str], int, str | None]:
         for div in section.find_all("div", attrs={"data-id": True}):
             link = div.find("a", class_="a-card__title")
             if link and link.get("href"):
-                href = link["href"]
+                href = str(link["href"])
                 if not href.startswith("http"):
                     href = "https://krisha.kz" + href
                 ad_urls.append(href)
@@ -138,7 +138,7 @@ def parse_listing_page(html: str) -> tuple[list[str], int, str | None]:
     next_url: str | None = None
     next_btn = soup.find("a", class_="paginator__btn--next")
     if next_btn and next_btn.get("href"):
-        href = next_btn["href"]
+        href = str(next_btn["href"])
         if not href.startswith("http"):
             href = "https://krisha.kz" + href
         next_url = href
