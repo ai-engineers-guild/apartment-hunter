@@ -26,10 +26,11 @@ jobs:
         with:
           version: '0.13.5'
           python-version: '3.12'
-          enable-cache: 'false'
-      - uses: NDDev-Technocracy-Standarts/std-0004-ci-cd-workflows/.github/actions/hosted-cache@ab62f45b2a3067e5a7425d703f7fd07f1618b72c # nddev-cicd-v0.6.14
-        with:
-          ecosystems: uv
+          enable-cache: 'true'
+          cache-dependency-glob: 'uv.lock'
+          # Only trusted main runs write the cache; pruning keeps source-built wheels only.
+          save-cache: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' }}
+          prune-cache: 'true'
       - name: Ruff and mypy
         run: |
           uv sync --locked --extra lint
@@ -52,10 +53,11 @@ jobs:
         with:
           version: '0.13.5'
           python-version: ${{ matrix.python-version }}
-          enable-cache: 'false'
-      - uses: NDDev-Technocracy-Standarts/std-0004-ci-cd-workflows/.github/actions/hosted-cache@ab62f45b2a3067e5a7425d703f7fd07f1618b72c # nddev-cicd-v0.6.14
-        with:
-          ecosystems: uv
+          enable-cache: 'true'
+          cache-dependency-glob: 'uv.lock'
+          # Only trusted main runs write the cache; pruning keeps source-built wheels only.
+          save-cache: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' }}
+          prune-cache: 'true'
       - name: Tests
         run: |
           uv sync --locked --extra test
